@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet, TextInput } from 'r
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import KeyboardScrollScreen, { KeyboardAvoid } from '../components/KeyboardAvoid';
+
 import MiniGlucoseChart from '../components/MiniGlucoseChart';
 import PredictabilityBadge from '../components/PredictabilityBadge';
 import FoodListEditor, { sumCarbs } from '../components/FoodListEditor';
@@ -56,47 +58,53 @@ export default function MealDetailScreen({ route, userId }) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{meal.name}</Text>
-      <Text style={styles.subtitle}>Usually ~{meal.usualCarbs}g carbs</Text>
-      <PredictabilityBadge data={predictability} />
-
-      {predicted && predicted.curve ? (
-        <View style={styles.predictBox}>
-          <Text style={styles.predictLabel}>
-            Predicted based on past {predicted.count} times
-          </Text>
-          <MiniGlucoseChart
-            glucose={predicted.curve}
-            color="148, 163, 184"
-          />
-        </View>
-      ) : null}
-
-      <View style={styles.foodsBox}>
-        <Text style={styles.sectionTitle}>What's in it</Text>
-        <FoodListEditor foods={meal.foods || []} onChange={saveFoods} />
-      </View>
-
-      <View style={styles.logBox}>
-        <Text style={styles.label}>Carbs this time (g)</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          value={carbsOverride}
-          onChangeText={setCarbsOverride}
-        />
-        <TouchableOpacity style={styles.logButton} onPress={logNow} disabled={logging}>
-          <Text style={styles.buttonText}>{logging ? 'Logging...' : "I'm eating this now"}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.sectionTitle}>Past times you've eaten this</Text>
-      <Text style={styles.hint}>
-        Each curve is your blood sugar from 30 min before eating to 3 hours after.
-      </Text>
-
+    <KeyboardAvoid style={styles.container}>
       <FlatList
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        ListHeaderComponent={
+          <View>
+          <Text style={styles.title}>{meal.name}</Text>
+          <Text style={styles.subtitle}>Usually ~{meal.usualCarbs}g carbs</Text>
+          <PredictabilityBadge data={predictability} />
+
+          {predicted && predicted.curve ? (
+            <View style={styles.predictBox}>
+              <Text style={styles.predictLabel}>
+                Predicted based on past {predicted.count} times
+              </Text>
+              <MiniGlucoseChart
+                glucose={predicted.curve}
+                color="148, 163, 184"
+              />
+            </View>
+          ) : null}
+
+          <View style={styles.foodsBox}>
+            <Text style={styles.sectionTitle}>What's in it</Text>
+            <FoodListEditor foods={meal.foods || []} onChange={saveFoods} />
+          </View>
+
+          <View style={styles.logBox}>
+            <Text style={styles.label}>Carbs this time (g)</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              value={carbsOverride}
+              onChangeText={setCarbsOverride}
+            />
+            <TouchableOpacity style={styles.logButton} onPress={logNow} disabled={logging}>
+              <Text style={styles.buttonText}>{logging ? 'Logging...' : "I'm eating this now"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.sectionTitle}>Past times you've eaten this</Text>
+          <Text style={styles.hint}>
+            Each curve is your blood sugar from 30 min before eating to 3 hours after.
+          </Text>
+
+          </View>
+        }
         data={logs}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -115,12 +123,12 @@ export default function MealDetailScreen({ route, userId }) {
           </Text>
         }
       />
-    </View>
+    </KeyboardAvoid>
   );
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.bg, padding: 20 },
+  container: { flex: 1, padding: 20 },
   title: { color: c.text, fontSize: 22, fontWeight: '700' },
   subtitle: { color: c.textMuted, fontSize: 13, marginBottom: 16 },
   foodsBox: { backgroundColor: c.card, borderRadius: 12, padding: 14, marginBottom: 12 },

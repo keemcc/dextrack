@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet, TextInput } from 'r
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import KeyboardScrollScreen, { KeyboardAvoid } from '../components/KeyboardAvoid';
+
 import MiniGlucoseChart from '../components/MiniGlucoseChart';
 import PredictabilityBadge from '../components/PredictabilityBadge';
 
@@ -44,44 +46,50 @@ export default function WorkoutDetailScreen({ route, userId }) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{workout.name}</Text>
-      <PredictabilityBadge data={predictability} />
-
-      {predicted && predicted.curve ? (
-        <View style={styles.predictBox}>
-          <Text style={styles.predictLabel}>Predicted based on past {predicted.count} times</Text>
-          <MiniGlucoseChart glucose={predicted.curve} color="148, 163, 184" />
-        </View>
-      ) : null}
-
-      <View style={styles.logBox}>
-        <Text style={styles.label}>Duration (minutes)</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          value={duration}
-          onChangeText={setDuration}
-        />
-        <Text style={styles.label}>Notes (optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="how it felt, intensity, etc."
-          placeholderTextColor={colors.faint}
-          value={notes}
-          onChangeText={setNotes}
-        />
-        <TouchableOpacity style={styles.logButton} onPress={logNow} disabled={logging}>
-          <Text style={styles.buttonText}>{logging ? 'Logging...' : "I just did this"}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.sectionTitle}>Past sessions</Text>
-      <Text style={styles.hint}>
-        Blood sugar from 30 min before to 4 hours after - workouts can drop it for a while.
-      </Text>
-
+    <KeyboardAvoid style={styles.container}>
       <FlatList
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        ListHeaderComponent={
+          <View>
+          <Text style={styles.title}>{workout.name}</Text>
+          <PredictabilityBadge data={predictability} />
+
+          {predicted && predicted.curve ? (
+            <View style={styles.predictBox}>
+              <Text style={styles.predictLabel}>Predicted based on past {predicted.count} times</Text>
+              <MiniGlucoseChart glucose={predicted.curve} color="148, 163, 184" />
+            </View>
+          ) : null}
+
+          <View style={styles.logBox}>
+            <Text style={styles.label}>Duration (minutes)</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              value={duration}
+              onChangeText={setDuration}
+            />
+            <Text style={styles.label}>Notes (optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="how it felt, intensity, etc."
+              placeholderTextColor={colors.faint}
+              value={notes}
+              onChangeText={setNotes}
+            />
+            <TouchableOpacity style={styles.logButton} onPress={logNow} disabled={logging}>
+              <Text style={styles.buttonText}>{logging ? 'Logging...' : "I just did this"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.sectionTitle}>Past sessions</Text>
+          <Text style={styles.hint}>
+            Blood sugar from 30 min before to 4 hours after - workouts can drop it for a while.
+          </Text>
+
+          </View>
+        }
         data={logs}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -101,12 +109,12 @@ export default function WorkoutDetailScreen({ route, userId }) {
           <Text style={styles.note}>No sessions logged yet - tap "I just did this" above.</Text>
         }
       />
-    </View>
+    </KeyboardAvoid>
   );
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.bg, padding: 20 },
+  container: { flex: 1, padding: 20 },
   title: { color: c.text, fontSize: 22, fontWeight: '700', marginBottom: 16 },
   predictBox: { backgroundColor: c.card, borderRadius: 12, padding: 14, marginTop: 12, marginBottom: 12 },
   predictLabel: { color: c.textMuted, fontSize: 12, fontStyle: 'italic', marginBottom: 6 },

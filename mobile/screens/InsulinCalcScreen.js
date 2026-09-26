@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
+import InsulinReminders from '../components/InsulinReminders';
+
 import { loadAllSettings, saveAllSettings, DEFAULT_SETTINGS, MEAL_TYPES, MEAL_TYPE_LABELS, guessMealType } from '../settings';
 
 export default function InsulinCalcScreen() {
@@ -80,7 +83,8 @@ export default function InsulinCalcScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
+    <KeyboardAvoid>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 60 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <Text style={styles.title}>Insulin Dose Calculator</Text>
       <Text style={styles.warning}>
         For learning purposes only. Not medical advice - always confirm doses with a doctor or
@@ -156,7 +160,10 @@ export default function InsulinCalcScreen() {
           <Text style={styles.disclaimer}>{result.disclaimer}</Text>
         </View>
       )}
+
+      <InsulinReminders />
     </ScrollView>
+    </KeyboardAvoid>
   );
 }
 

@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import KeyboardScrollScreen, { KeyboardAvoid } from '../components/KeyboardAvoid';
+
 import FoodListEditor, { sumCarbs, newFoodId } from '../components/FoodListEditor';
 
 export default function AddMealScreen({ userId, navigation }) {
@@ -52,7 +54,7 @@ export default function AddMealScreen({ userId, navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardScrollScreen contentStyle={styles.container}>
       <Text style={styles.title}>New Meal</Text>
 
       <Text style={styles.label}>Look up carbs (USDA food database)</Text>
@@ -73,12 +75,9 @@ export default function AddMealScreen({ userId, navigation }) {
       {error && <Text style={styles.error}>{error}</Text>}
 
       {results.length > 0 && (
-        <FlatList
-          style={styles.resultsList}
-          data={results}
-          keyExtractor={(item) => String(item.fdcId)}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={styles.resultRow} onPress={() => pickFood(item)}>
+        <View style={styles.resultsList}>
+          {results.map((item) => (
+            <TouchableOpacity key={String(item.fdcId)} style={styles.resultRow} onPress={() => pickFood(item)}>
               <Text style={styles.resultName} numberOfLines={1}>
                 {item.description}
               </Text>
@@ -86,8 +85,8 @@ export default function AddMealScreen({ userId, navigation }) {
                 {item.carbsPer100g != null ? `${Math.round(item.carbsPer100g)}g / 100g` : 'no carb data'}
               </Text>
             </TouchableOpacity>
-          )}
-        />
+          ))}
+        </View>
       )}
 
       <View style={styles.divider} />
@@ -110,12 +109,12 @@ export default function AddMealScreen({ userId, navigation }) {
       <TouchableOpacity style={styles.saveButton} onPress={save}>
         <Text style={styles.buttonText}>Save Meal</Text>
       </TouchableOpacity>
-    </View>
+    </KeyboardScrollScreen>
   );
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.bg, padding: 20 },
+  container: { flexGrow: 1, padding: 20 },
   title: { color: c.text, fontSize: 22, fontWeight: '700', marginBottom: 16 },
   label: { color: c.textSoft, fontSize: 13, marginBottom: 6 },
   searchRow: { flexDirection: 'row', gap: 8 },
