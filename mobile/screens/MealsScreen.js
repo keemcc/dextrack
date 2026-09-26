@@ -1,14 +1,26 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
+import { useTheme } from '../theme';
+import PredictabilityBadge from '../components/PredictabilityBadge';
 
 export default function MealsScreen({ userId, navigation }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [meals, setMeals] = useState([]);
+  const [predict, setPredict] = useState({});
 
   const load = useCallback(async () => {
     const data = await api.getMeals(userId);
     setMeals(data);
+    const scores = {};
+    await Promise.all(
+      data.map(async (m) => {
+        try { scores[m.id] = await api.getPredictability(m.id, userId); } catch (e) {}
+      })
+    );
+    setPredict(scores);
   }, [userId]);
 
   useFocusEffect(
@@ -41,6 +53,7 @@ export default function MealsScreen({ userId, navigation }) {
             <View style={{ flex: 1 }}>
               <Text style={styles.mealName}>{item.name}</Text>
               <Text style={styles.mealCarbs}>~{item.usualCarbs}g carbs usually</Text>
+              <PredictabilityBadge data={predict[item.id]} />
             </View>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
@@ -53,22 +66,22 @@ export default function MealsScreen({ userId, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 20 },
+const makeStyles = (c) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg, padding: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { color: 'white', fontSize: 22, fontWeight: '700' },
-  addButton: { backgroundColor: '#22c55e', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  addButtonText: { color: 'white', fontWeight: '700' },
+  title: { color: c.text, fontSize: 22, fontWeight: '700' },
+  addButton: { backgroundColor: c.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  addButtonText: { color: c.onAccent, fontWeight: '700' },
   mealRow: {
     flexDirection: 'row',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.card,
     padding: 14,
     borderRadius: 10,
     marginBottom: 10,
     alignItems: 'center',
   },
-  mealName: { color: 'white', fontSize: 16, fontWeight: '600' },
-  mealCarbs: { color: '#94a3b8', fontSize: 13 },
-  chevron: { color: '#64748b', fontSize: 22 },
-  note: { color: '#64748b', textAlign: 'center', marginTop: 20 },
+  mealName: { color: c.text, fontSize: 16, fontWeight: '600' },
+  mealCarbs: { color: c.textMuted, fontSize: 13 },
+  chevron: { color: c.faint, fontSize: 22 },
+  note: { color: c.faint, textAlign: 'center', marginTop: 20 },
 });

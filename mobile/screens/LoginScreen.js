@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Linking, StyleSheet } from 'react-native';
+import { useTheme } from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../api';
 
 export default function LoginScreen({ onLoggedIn }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [userId, setUserId] = useState('');
 
   const openDexcomLogin = () => {
@@ -32,7 +35,7 @@ export default function LoginScreen({ onLoggedIn }) {
       <TextInput
         style={styles.input}
         placeholder="Paste your userId here"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={colors.textMuted}
         value={userId}
         onChangeText={setUserId}
         autoCapitalize="none"
@@ -50,25 +53,25 @@ export default function LoginScreen({ onLoggedIn }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 24, justifyContent: 'center' },
-  title: { color: 'white', fontSize: 24, fontWeight: '700', marginBottom: 12 },
-  body: { color: '#cbd5e1', fontSize: 14, lineHeight: 20, marginBottom: 24 },
+const makeStyles = (c) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg, padding: 24, justifyContent: 'center' },
+  title: { color: c.text, fontSize: 24, fontWeight: '700', marginBottom: 12 },
+  body: { color: c.textSoft, fontSize: 14, lineHeight: 20, marginBottom: 24 },
   button: {
-    backgroundColor: '#22c55e',
+    backgroundColor: c.accent,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
     marginBottom: 16,
   },
   secondary: { backgroundColor: '#3b82f6' },
-  buttonText: { color: 'white', fontWeight: '700', fontSize: 15 },
+  buttonText: { color: c.onAccent, fontWeight: '700', fontSize: 15 },
   input: {
-    backgroundColor: '#1e293b',
-    color: 'white',
+    backgroundColor: c.card,
+    color: c.text,
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
   },
-  note: { color: '#64748b', fontSize: 12, marginTop: 8 },
+  note: { color: c.faint, fontSize: 12, marginTop: 8 },
 });

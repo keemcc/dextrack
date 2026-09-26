@@ -1,14 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
+import { useTheme } from '../theme';
 
 const screenWidth = Dimensions.get('window').width;
 
 // Shows a small glucose curve for one logged meal/workout instance,
 // with a marker line where the meal/workout happened.
-export default function MiniGlucoseChart({ glucose, loggedAt, width }) {
+export default function MiniGlucoseChart({ glucose, loggedAt, width, color = '34, 197, 94' }) {
+  const { colors } = useTheme();
   if (!glucose || glucose.length < 2) {
-    return <Text style={styles.empty}>Not enough glucose data yet for this window.</Text>;
+    return <Text style={[styles.empty, { color: colors.faint }]}>Not enough glucose data yet for this window.</Text>;
   }
 
   const values = glucose.map((g) => g.value);
@@ -25,19 +27,19 @@ export default function MiniGlucoseChart({ glucose, loggedAt, width }) {
         withInnerLines={false}
         withVerticalLabels={false}
         chartConfig={{
-          backgroundGradientFrom: '#1e293b',
-          backgroundGradientTo: '#1e293b',
-          color: (opacity = 1) => `rgba(34, 197, 94, ${opacity})`,
-          labelColor: () => '#64748b',
+          backgroundGradientFrom: colors.card,
+          backgroundGradientTo: colors.card,
+          color: (opacity = 1) => `rgba(${color}, ${opacity})`,
+          labelColor: () => colors.faint,
           strokeWidth: 2,
         }}
         bezier
         style={{ borderRadius: 10 }}
       />
       <View style={styles.rangeRow}>
-        <Text style={styles.rangeText}>Low: {low} mg/dL</Text>
-        <Text style={styles.rangeText}>High: {high} mg/dL</Text>
-        <Text style={styles.rangeText}>Swing: {high - low} mg/dL</Text>
+        <Text style={[styles.rangeText, { color: colors.textMuted }]}>Low: {low} mg/dL</Text>
+        <Text style={[styles.rangeText, { color: colors.textMuted }]}>High: {high} mg/dL</Text>
+        <Text style={[styles.rangeText, { color: colors.textMuted }]}>Swing: {high - low} mg/dL</Text>
       </View>
     </View>
   );

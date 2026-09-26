@@ -27,12 +27,15 @@ export const api = {
 
   // --- meals (templates + logged instances) ---
   getMeals: (userId) => request(`/meals?userId=${userId}`),
-  addMeal: (userId, name, usualCarbs) =>
-    request('/meals', { method: 'POST', body: JSON.stringify({ userId, name, usualCarbs }) }),
+  addMeal: (userId, name, usualCarbs, foods) =>
+    request('/meals', { method: 'POST', body: JSON.stringify({ userId, name, usualCarbs, foods }) }),
+  updateMeal: (id, updates) => request(`/meals/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteMeal: (id) => request(`/meals/${id}`, { method: 'DELETE' }),
   logMeal: (mealId, userId, carbs) =>
     request(`/meals/${mealId}/log`, { method: 'POST', body: JSON.stringify({ userId, carbs }) }),
   getMealLogs: (mealId, userId) => request(`/meals/${mealId}/logs?userId=${userId}`),
+  getPredictedCurve: (mealId, userId) => request(`/meals/${mealId}/predicted-curve?userId=${userId}`),
+  getPredictability: (mealId, userId) => request(`/meals/${mealId}/predictability?userId=${userId}`),
 
   // --- workouts (templates + logged instances) ---
   getWorkouts: (userId) => request(`/workouts?userId=${userId}`),
@@ -45,6 +48,11 @@ export const api = {
       body: JSON.stringify({ userId, durationMinutes, notes }),
     }),
   getWorkoutLogs: (workoutId, userId) => request(`/workouts/${workoutId}/logs?userId=${userId}`),
+  getWorkoutPredictedCurve: (workoutId, userId) => request(`/workouts/${workoutId}/predicted-curve?userId=${userId}`),
+  getWorkoutPredictability: (workoutId, userId) => request(`/workouts/${workoutId}/predictability?userId=${userId}`),
+
+  // --- chatbot ---
+  chat: (payload) => request('/chat', { method: 'POST', body: JSON.stringify(payload) }),
 
   // --- insulin calc ---
   calculateDose: (payload) =>

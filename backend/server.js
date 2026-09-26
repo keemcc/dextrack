@@ -30,6 +30,8 @@ const {
   DEXCOM_API_BASE,
   USDA_API_KEY,
   PORT,
+  GEMINI_API_KEY,
+  GEMINI_MODEL,
 } = process.env;
 
 // =====================================================================
@@ -208,6 +210,80 @@ async function getGlucoseWindow(userId, centerTime, minutesBefore, minutesAfter)
     .value();
 }
 
+// Pull in the Dexcom data for any past meal windows that were logged before their
+// 3 hours had finished (so the "after" part was not cached yet).
+async function ensureMealWindowsCached(mealId, userId) {
+  const logs = db.get('mealLogs').filter({ mealId, userId }).value();
+  await Promise.all(
+    logs
+      .filter((l) => new Date(l.loggedAt).getTime() + 180 * 60000 < Date.now())
+      .map((l) => getGlucoseWindow(userId, l.loggedAt, 30, 180).catch(() => {}))
+  );
+}
+
+async function ensureWorkoutWindowsCached(workoutId, userId) {
+  const logs = db.get('workoutLogs').filter({ workoutId, userId }).value();
+  await Promise.all(
+    logs
+      .filter((l) => new Date(l.loggedAt).getTime() + 240 * 60000 < Date.now())
+      .map((l) => getGlucoseWindow(userId, l.loggedAt, 30, 240).catch(() => {}))
+  );
+}
+
+// Cache-only version of the meal window, with each reading tagged by minutes
+// from the meal time. Used by the prediction/predictability endpoints.
+function getCachedCurves(collection, idField, id, userId, afterMinutes) {
+  const logs = db.get(collection).filter({ [idField]: id, userId }).value();
+  return logs
+    .map((log) => {
+      const center = new Date(log.loggedAt).getTime();
+      const points = db
+        .get('glucoseHistory')
+        .filter(
+          (r) =>
+            r.userId === userId &&
+            new Date(r.systemTime).getTime() >= center - 30 * 60000 &&
+            new Date(r.systemTime).getTime() <= center + afterMinutes * 60000
+        )
+        .value()
+        .map((r) => ({
+          offsetMin: (new Date(r.systemTime).getTime() - center) / 60000,
+          value: r.value,
+        }));
+      return { log, points };
+    })
+    .filter((c) => c.points.length >= 2);
+}
+
+const getCachedMealCurves = (mealId, userId) => getCachedCurves('mealLogs', 'mealId', mealId, userId, 180);
+const getCachedWorkoutCurves = (workoutId, userId) => getCachedCurves('workoutLogs', 'workoutId', workoutId, userId, 240);
+
+// average several curves, aligned by minutes from the event (5 min buckets)
+function averageCurves(curves) {
+  const buckets = {};
+  curves.forEach(({ points }) => {
+    points.forEach((p) => {
+      const key = Math.round(p.offsetMin / 5) * 5;
+      (buckets[key] = buckets[key] || []).push(p.value);
+    });
+  });
+  return Object.keys(buckets)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((offsetMin) => {
+      const vals = buckets[offsetMin];
+      return { offsetMin, value: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) };
+    });
+}
+
+function stdevLabel(values) {
+  if (values.length < 2) return { label: null, stdev: null, count: values.length, note: 'not enough data' };
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / (values.length - 1);
+  const stdev = Math.round(Math.sqrt(variance) * 10) / 10;
+  return { label: stdev < 20 ? 'Consistent' : 'Unpredictable', stdev, count: values.length, mean: Math.round(mean) };
+}
+
 // =====================================================================
 // FOOD / CARB LOOKUP - USDA FoodData Central
 // =====================================================================
@@ -253,12 +329,23 @@ app.get('/food/search', async (req, res) => {
 // =====================================================================
 
 // Create a meal template ("Chicken Alfredo", usual carbs ~65g)
+// foods = [{ id?, name, carbs }] - a meal can have several food items; usualCarbs is their sum
+function normalizeFoods(foods) {
+  if (!Array.isArray(foods)) return [];
+  return foods
+    .filter((f) => f && String(f.name || '').trim())
+    .map((f) => ({ id: f.id || uuidv4(), name: String(f.name).trim(), carbs: Math.max(0, Number(f.carbs) || 0) }));
+}
+const sumFoodCarbs = (foods) => Math.round(foods.reduce((a, f) => a + f.carbs, 0));
+
 app.post('/meals', (req, res) => {
   const { userId, name, usualCarbs } = req.body;
-  if (!userId || !name || usualCarbs == null) {
-    return res.status(400).json({ error: 'userId, name, and usualCarbs are required' });
+  const foods = normalizeFoods(req.body.foods);
+  const carbsTotal = foods.length ? sumFoodCarbs(foods) : usualCarbs;
+  if (!userId || !name || carbsTotal == null) {
+    return res.status(400).json({ error: 'userId, name, and foods (or usualCarbs) are required' });
   }
-  const meal = { id: uuidv4(), userId, name, usualCarbs, createdAt: Date.now() };
+  const meal = { id: uuidv4(), userId, name, usualCarbs: carbsTotal, foods, createdAt: Date.now() };
   db.get('meals').push(meal).write();
   res.status(201).json(meal);
 });
@@ -266,6 +353,21 @@ app.post('/meals', (req, res) => {
 app.get('/meals', (req, res) => {
   const { userId } = req.query;
   res.json(db.get('meals').filter({ userId }).value());
+});
+
+// Edit a meal: rename and/or replace its food list (add/remove items). usualCarbs follows the foods.
+app.put('/meals/:id', (req, res) => {
+  const meal = db.get('meals').find({ id: req.params.id }).value();
+  if (!meal) return res.status(404).json({ error: 'Meal not found' });
+
+  const updates = {};
+  if (req.body.name && String(req.body.name).trim()) updates.name = String(req.body.name).trim();
+  if (Array.isArray(req.body.foods)) {
+    updates.foods = normalizeFoods(req.body.foods);
+    if (updates.foods.length) updates.usualCarbs = sumFoodCarbs(updates.foods);
+  }
+  db.get('meals').find({ id: req.params.id }).assign(updates).write();
+  res.json(db.get('meals').find({ id: req.params.id }).value());
 });
 
 app.delete('/meals/:id', (req, res) => {
@@ -318,6 +420,34 @@ app.get('/meals/:id/logs', async (req, res) => {
   );
 
   res.json(withGlucose);
+});
+
+// GET /meals/:id/predicted-curve?userId=  - average of past curves, aligned by minutes from meal time
+app.get('/meals/:id/predicted-curve', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  await ensureMealWindowsCached(req.params.id, userId);
+
+  const curves = getCachedMealCurves(req.params.id, userId);
+  if (curves.length < 2) {
+    return res.json({ curve: null, count: curves.length, note: 'Need at least 2 logged instances with glucose data.' });
+  }
+
+  res.json({ curve: averageCurves(curves), count: curves.length });
+});
+
+// GET /meals/:id/predictability?userId=  - stdev of peak glucose across past instances
+app.get('/meals/:id/predictability', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  await ensureMealWindowsCached(req.params.id, userId);
+
+  const peaks = getCachedMealCurves(req.params.id, userId)
+    .map(({ points }) => Math.max(...points.filter((p) => p.offsetMin >= 0).map((p) => p.value)))
+    .filter(Number.isFinite);
+
+  const r = stdevLabel(peaks);
+  res.json({ ...r, avgPeak: r.mean });
 });
 
 // =====================================================================
@@ -385,6 +515,39 @@ app.get('/workouts/:id/logs', async (req, res) => {
   res.json(withGlucose);
 });
 
+// GET /workouts/:id/predicted-curve?userId=
+app.get('/workouts/:id/predicted-curve', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  await ensureWorkoutWindowsCached(req.params.id, userId);
+
+  const curves = getCachedWorkoutCurves(req.params.id, userId);
+  if (curves.length < 2) {
+    return res.json({ curve: null, count: curves.length, note: 'Need at least 2 logged sessions with glucose data.' });
+  }
+  res.json({ curve: averageCurves(curves), count: curves.length });
+});
+
+// GET /workouts/:id/predictability?userId=  - stdev of the glucose drop (baseline minus lowest point after)
+app.get('/workouts/:id/predictability', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  await ensureWorkoutWindowsCached(req.params.id, userId);
+
+  const drops = getCachedWorkoutCurves(req.params.id, userId)
+    .map(({ points }) => {
+      const before = points.filter((p) => p.offsetMin <= 0).map((p) => p.value);
+      const after = points.filter((p) => p.offsetMin > 0).map((p) => p.value);
+      if (!before.length || !after.length) return null;
+      const baseline = before.reduce((a, b) => a + b, 0) / before.length;
+      return baseline - Math.min(...after);
+    })
+    .filter((d) => d != null);
+
+  const r = stdevLabel(drops);
+  res.json({ ...r, avgDrop: r.mean });
+});
+
 // =====================================================================
 // INSULIN CALCULATOR - ratio-style input ("1 unit per 8g carbs") + step-based correction
 // =====================================================================
@@ -398,6 +561,23 @@ app.get('/workouts/:id/logs', async (req, res) => {
 //   correctionStepUnits: 1,                 // ...add 1 unit
 //   target: 120
 // }
+function computeDose({ carbs, currentGlucose, ratioUnits, ratioCarbs, correctionStepAmount, correctionStepUnits, target }) {
+  // carb dose scales normally (60g at a 1:8 ratio = 7.5 units)
+  const carbDose = (carbs / ratioCarbs) * ratioUnits;
+
+  // correction dose is a STEP function, not continuous: only whole steps over target count.
+  // e.g. 220 current, target 120, step of 50/1unit -> (220-120)/50 = 2 steps -> +2 units
+  const over = Math.max(0, currentGlucose - target);
+  const steps = Math.floor(over / correctionStepAmount);
+  const correctionDose = steps * correctionStepUnits;
+
+  return {
+    carbDose: Math.round(carbDose * 10) / 10,
+    correctionDose,
+    totalDose: Math.round((carbDose + correctionDose) * 10) / 10,
+  };
+}
+
 app.post('/calculate-dose', (req, res) => {
   const {
     carbs,
@@ -415,24 +595,265 @@ app.post('/calculate-dose', (req, res) => {
     return res.status(400).json({ error: `Missing fields: ${missing.map(([k]) => k).join(', ')}` });
   }
 
-  // carb dose scales normally (60g at a 1:8 ratio = 7.5 units)
-  const carbDose = (carbs / ratioCarbs) * ratioUnits;
-
-  // correction dose is a STEP function, not continuous: only whole steps over target count.
-  // e.g. 220 current, target 120, step of 50/1unit -> (220-120)/50 = 2 steps -> +2 units
-  const over = Math.max(0, currentGlucose - target);
-  const steps = Math.floor(over / correctionStepAmount);
-  const correctionDose = steps * correctionStepUnits;
-
-  const totalDose = Math.round((carbDose + correctionDose) * 10) / 10;
+  const { carbDose, correctionDose, totalDose } = computeDose(req.body);
 
   res.json({
-    carbDose: Math.round(carbDose * 10) / 10,
+    carbDose,
     correctionDose,
     totalDose,
     disclaimer:
       'This is a school-project calculation, not medical advice. Always confirm doses with a doctor or diabetes care team.',
   });
+});
+
+// =====================================================================
+// CHATBOT - Gemini parses what you're eating; the dose math stays deterministic
+// =====================================================================
+
+async function callGemini(prompt, { json = false } = {}) {
+  if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set in backend/.env');
+  const model = GEMINI_MODEL || 'gemini-3.8-flash';
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: json ? { responseMimeType: 'application/json', temperature: 0.2 } : { temperature: 0.5 },
+  };
+
+  // Retry a couple of times on temporary overload (503) / rate limit (429)
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        body,
+        { headers: { 'x-goog-api-key': GEMINI_API_KEY }, timeout: 20000 }
+      );
+      return r.data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
+    } catch (err) {
+      const status = err.response?.status;
+      if ((status === 503 || status === 429) && attempt < 2) {
+        await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+// Summarize past instances of a saved meal from cached glucose data.
+function summarizeMealHistory(mealId, userId) {
+  const curves = getCachedMealCurves(mealId, userId);
+  if (curves.length < 2) return null;
+  const stats = curves.map(({ points }) => {
+    const before = points.filter((p) => p.offsetMin <= 0);
+    const after = points.filter((p) => p.offsetMin > 0);
+    const baseline = before.length ? before.reduce((a, p) => a + p.value, 0) / before.length : points[0].value;
+    return {
+      baseline,
+      peak: Math.max(...after.map((p) => p.value)),
+      low: Math.min(...after.filter((p) => p.offsetMin >= 90).map((p) => p.value), Infinity),
+    };
+  });
+  const avg = (k) => Math.round(stats.reduce((a, s) => a + s[k], 0) / stats.length);
+  const lows = stats.map((s) => s.low).filter(Number.isFinite);
+  return {
+    count: curves.length,
+    avgBaseline: avg('baseline'),
+    avgPeak: avg('peak'),
+    lowestLateValue: lows.length ? Math.min(...lows) : null,
+  };
+}
+
+// Deterministic, bounded adjustment (max +/-20%). Gemini only explains it.
+function suggestAdjustment(history) {
+  if (!history) return { percent: 0, reason: 'no history' };
+  if (history.lowestLateValue != null && history.lowestLateValue < 75) {
+    return { percent: -15, reason: `glucose dropped as low as ${history.lowestLateValue} mg/dL 1.5-3h after this meal before` };
+  }
+  if (history.avgPeak > 200) return { percent: 15, reason: `glucose averaged a peak of ${history.avgPeak} mg/dL after this meal` };
+  if (history.avgPeak > 180) return { percent: 10, reason: `glucose averaged a peak of ${history.avgPeak} mg/dL after this meal` };
+  return { percent: 0, reason: `glucose averaged a peak of ${history.avgPeak} mg/dL, within a reasonable range` };
+}
+
+// Summarize past sessions of a saved workout from cached glucose data.
+function summarizeWorkoutHistory(workoutId, userId) {
+  const curves = getCachedWorkoutCurves(workoutId, userId);
+  const stats = curves
+    .map(({ points }) => {
+      const before = points.filter((p) => p.offsetMin <= 0).map((p) => p.value);
+      const after = points.filter((p) => p.offsetMin > 0).map((p) => p.value);
+      if (!before.length || !after.length) return null;
+      const baseline = before.reduce((a, b) => a + b, 0) / before.length;
+      return { baseline, low: Math.min(...after) };
+    })
+    .filter(Boolean);
+  if (stats.length < 2) return null;
+  const avg = (k) => Math.round(stats.reduce((a, x) => a + x[k], 0) / stats.length);
+  return {
+    count: stats.length,
+    avgBaseline: avg('baseline'),
+    avgLow: avg('low'),
+    avgDrop: avg('baseline') - avg('low'),
+    lowestEver: Math.min(...stats.map((x) => x.low)),
+  };
+}
+
+// Deterministic carb suggestion for exercise. Never suggests changing insulin - that's for the care team.
+function suggestWorkoutCarbs(history, currentGlucose) {
+  const reasons = [];
+  let carbs = 0;
+  if (history && (history.lowestEver < 70 || history.avgLow < 80)) {
+    carbs = 30;
+    reasons.push(`glucose has dropped as low as ${history.lowestEver} mg/dL after this workout`);
+  } else if (history && history.avgDrop > 50) {
+    carbs = 15;
+    reasons.push(`glucose drops about ${history.avgDrop} mg/dL on average after this workout`);
+  }
+  if (currentGlucose != null && currentGlucose < 100) {
+    carbs = Math.max(carbs, 15);
+    reasons.push(`your current glucose is ${currentGlucose} mg/dL`);
+  }
+  return { carbs, reasons };
+}
+
+function normalizeSettings(src = {}) {
+  return {
+    ratioUnits: Number(src.ratioUnits) || 1,
+    ratioCarbs: Number(src.ratioCarbs) || 8,
+    correctionStepAmount: Number(src.correctionStepAmount) || 50,
+    correctionStepUnits: Number(src.correctionStepUnits) || 1,
+    target: Number(src.target) || 120,
+  };
+}
+
+const guessMealType = (hour) => (hour >= 4 && hour < 11 ? 'breakfast' : hour < 16 && hour >= 11 ? 'lunch' : hour >= 16 && hour < 21 ? 'dinner' : 'snack');
+
+// POST /chat { userId, message, currentGlucose, ratioUnits?, ratioCarbs?, correctionStepAmount?, correctionStepUnits?, target? }
+app.post('/chat', async (req, res) => {
+  const { userId, message, currentGlucose } = req.body;
+  if (!userId || !message) return res.status(400).json({ error: 'userId and message required' });
+
+  let settings = normalizeSettings(req.body); // replaced by the meal slot's settings once we know the slot
+
+  const meals = db.get('meals').filter({ userId }).value();
+  const workouts = db.get('workouts').filter({ userId }).value();
+
+  try {
+    // Step 1: Gemini turns free text into structured data + matches a saved meal
+    const parsed = JSON.parse(
+      await callGemini(
+        `You help a person with diabetes log meals. From their message, estimate total carbohydrates in grams and ` +
+          `check whether it matches one of their saved meals.\n` +
+          `Saved meals: ${JSON.stringify(meals.map((m) => ({ id: m.id, name: m.name, usualCarbs: m.usualCarbs })))}\n` +
+          `Saved workouts: ${JSON.stringify(workouts.map((w) => ({ id: w.id, name: w.name })))}\n` +
+          `Message: "${String(message).replace(/"/g, "'")}"\n` +
+          `Reply ONLY with JSON: {"kind": "meal"|"workout"|"other", "foods": string, "carbs": number, "matchedMealId": string|null, ` +
+          `"workoutName": string, "matchedWorkoutId": string|null, "durationMinutes": number|null, "mealType": "breakfast"|"lunch"|"dinner"|"snack"|null}. ` +
+          `kind is "meal" if they are about to eat, "workout" if they are about to exercise, otherwise "other". ` +
+          `If the message states a carb amount, use it. Matched ids must come from the saved lists or be null. mealType is the meal slot if stated or implied, else null.`,
+        { json: true }
+      )
+    );
+
+    if (parsed.kind === 'workout') {
+      const workout = workouts.find((w) => w.id === parsed.matchedWorkoutId) || null;
+      if (workout) await ensureWorkoutWindowsCached(workout.id, userId);
+      const history = workout ? summarizeWorkoutHistory(workout.id, userId) : null;
+      const glucoseNow = currentGlucose != null && currentGlucose !== '' ? Number(currentGlucose) : null;
+      const sug = suggestWorkoutCarbs(history, glucoseNow);
+
+      let reply;
+      try {
+        reply = await callGemini(
+          `You are a friendly diabetes companion in a school hackathon app. Write a short (3-5 sentences) reply.\n` +
+            `Facts (do not change any numbers):\n` +
+            `- Planned workout: ${parsed.workoutName || 'exercise'}${parsed.durationMinutes ? `, about ${parsed.durationMinutes} min` : ''}\n` +
+            (glucoseNow != null ? `- Current glucose: ${glucoseNow} mg/dL\n` : '') +
+            (history
+              ? `- The user has done the saved workout "${workout.name}" ${history.count} times. Glucose averaged ${history.avgBaseline} before and ${history.avgLow} at its lowest afterward (a drop of ${history.avgDrop}).\n`
+              : `- No past history for this workout.\n`) +
+            (sug.carbs
+              ? `- Suggestion: have about ${sug.carbs}g of carbs before starting because ${sug.reasons.join(' and ')}.\n`
+              : `- No extra carbs suggested.\n`) +
+            `Do NOT suggest any insulin dose change; say adjustments to insulin are a question for their care team. ` +
+            `Remind them to check glucose during and after exercise. Do not invent other numbers.`
+        );
+      } catch (e) {
+        reply =
+          (sug.carbs ? `Consider about ${sug.carbs}g of carbs before this workout (${sug.reasons.join(', ')}). ` : 'No extra carbs suggested. ') +
+          'Check your glucose during and after, and ask your care team about insulin adjustments.';
+      }
+
+      return res.json({
+        reply,
+        kind: 'workout',
+        matchedWorkout: workout ? { id: workout.id, name: workout.name } : null,
+        history,
+        carbSuggestion: sug.carbs ? { carbs: sug.carbs, reasons: sug.reasons } : null,
+      });
+    }
+
+    if (parsed.kind !== 'meal' || !(parsed.carbs >= 0)) {
+      const reply = await callGemini(
+        `You are a friendly diabetes companion in a school hackathon app. Reply briefly. Tell the user to describe what they plan to eat so you can estimate carbs and insulin. Never give medical advice beyond the app's calculator. User said: "${message}"`
+      );
+      return res.json({ reply });
+    }
+
+    const validTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
+    const mealType = validTypes.includes(parsed.mealType)
+      ? parsed.mealType
+      : validTypes.includes(req.body.mealType)
+      ? req.body.mealType
+      : guessMealType(Number.isFinite(Number(req.body.localHour)) ? Number(req.body.localHour) : new Date().getHours());
+    settings = normalizeSettings((req.body.settingsByType && req.body.settingsByType[mealType]) || req.body);
+
+    const meal = meals.find((m) => m.id === parsed.matchedMealId) || null;
+    const glucose = currentGlucose != null && currentGlucose !== '' ? Number(currentGlucose) : settings.target;
+    const dose = computeDose({ carbs: parsed.carbs, currentGlucose: glucose, ...settings });
+
+    if (meal) await ensureMealWindowsCached(meal.id, userId);
+    const history = meal ? summarizeMealHistory(meal.id, userId) : null;
+    const adj = suggestAdjustment(history);
+    const adjustedDose = Math.round(dose.totalDose * (1 + adj.percent / 100) * 2) / 2; // nearest 0.5 unit
+
+    // Step 2: Gemini explains the numbers we computed. It is not allowed to change them.
+    let reply;
+    try {
+      reply = await callGemini(
+        `You are a friendly diabetes companion in a school hackathon app. Write a short (3-5 sentences) reply.\n` +
+          `Facts (do not change any numbers):\n` +
+          `- Meal: ${parsed.foods}, about ${parsed.carbs}g carbs\n` +
+          `- Meal slot: ${mealType} (dose uses that slot's saved ratio)\n` + `- Current glucose used: ${glucose} mg/dL\n` +
+          `- Calculated dose: ${dose.totalDose} units (${dose.carbDose} for carbs + ${dose.correctionDose} correction)\n` +
+          (history
+            ? `- The user has eaten the saved meal "${meal.name}" ${history.count} times. ${adj.reason}. ` +
+              (adj.percent !== 0
+                ? `Suggested adjusted dose: ${adjustedDose} units (${adj.percent > 0 ? '+' : ''}${adj.percent}%).\n`
+                : `No dose change suggested.\n`)
+            : `- No past history for this meal, so no adjustment.\n`) +
+          `End by reminding them to confirm with their doctor or care team. Do not invent other numbers.`
+      );
+    } catch (e) {
+      reply =
+        `${parsed.foods} (~${parsed.carbs}g carbs): calculated dose is ${dose.totalDose} units.` +
+        (adj.percent !== 0 ? ` Based on ${history.count} past times, consider ${adjustedDose} units (${adj.reason}).` : '') +
+        ' Please confirm with your doctor or care team.';
+    }
+
+    res.json({
+      reply,
+      foods: parsed.foods,
+      carbs: parsed.carbs,
+      matchedMeal: meal ? { id: meal.id, name: meal.name } : null,
+      mealType,
+      settingsUsed: settings,
+      dose,
+      history,
+      adjustment: adj.percent !== 0 ? { percent: adj.percent, reason: adj.reason, adjustedDose } : null,
+    });
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res.status(500).json({ error: err.message.includes('GEMINI_API_KEY') ? err.message : 'Chat failed' });
+  }
 });
 
 // =====================================================================

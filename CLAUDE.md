@@ -117,3 +117,27 @@ A consistency label per meal template based on variance across past curves.
 - Dexcom sandbox and USDA API keys are the developer's own - don't attempt
   to sign up for accounts or generate credentials; ask if `.env` is missing
   values rather than guessing or hardcoding placeholders that look real.
+
+## Added since the brief (predictions, assistant, themes)
+- Predicted meal + workout curves: `GET /meals/:id/predicted-curve`,
+  `GET /workouts/:id/predicted-curve` (2+ logs; averaged by minutes from the
+  event). Shown as a lighter line on the detail screens.
+- Predictability badge: `GET /meals/:id/predictability`,
+  `GET /workouts/:id/predictability` ("Consistent" if stdev < 20 mg/dL; for
+  workouts it's the stdev of the post-workout drop). Badge on list + detail.
+- Multi-item meals: meals have `foods: [{id, name, carbs}]`, `usualCarbs` is
+  their sum. `POST /meals` takes `foods`; `PUT /meals/:id` edits them.
+  UI: `components/FoodListEditor.js` (Add Meal + Meal Detail).
+- Gemini assistant: `POST /chat` + Assistant tab. Gemini only parses the
+  message (meal/workout, carbs, matches a saved meal) and words the reply;
+  the dose is computed in code (`computeDose`) and history-based adjustments
+  are bounded (+/-20%, `suggestAdjustment`). Workouts get a carb suggestion,
+  never an insulin change. Needs `GEMINI_API_KEY` (optional `GEMINI_MODEL`,
+  default `gemini-3.8-flash`) in `backend/.env`.
+- Insulin settings are saved per meal slot (breakfast/lunch/dinner/snack) in
+  AsyncStorage (`mobile/settings.js`), shared by Insulin Calc and the
+  assistant.
+- Light/dark theme: `mobile/theme.js` (`useTheme()`); screens build styles
+  with `makeStyles(colors)`. Toggle (Auto/Light/Dark) is on the Dashboard.
+- Past windows: `ensureMealWindowsCached` / `ensureWorkoutWindowsCached` pull
+  the "after" readings from Dexcom once a window has finished.

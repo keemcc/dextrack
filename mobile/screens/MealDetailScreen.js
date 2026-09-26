@@ -1,18 +1,29 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, FlatList, StyleSheet, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
+import { useTheme } from '../theme';
 import MiniGlucoseChart from '../components/MiniGlucoseChart';
+import PredictabilityBadge from '../components/PredictabilityBadge';
+import FoodListEditor, { sumCarbs } from '../components/FoodListEditor';
 
 export default function MealDetailScreen({ route, userId }) {
-  const { meal } = route.params;
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const [meal, setMeal] = useState(route.params.meal);
   const [logs, setLogs] = useState([]);
   const [carbsOverride, setCarbsOverride] = useState(String(meal.usualCarbs));
   const [logging, setLogging] = useState(false);
+  const [predicted, setPredicted] = useState(null);
+  const [predictability, setPredictability] = useState(null);
 
   const load = useCallback(async () => {
     const data = await api.getMealLogs(meal.id, userId);
     setLogs(data);
+    try {
+      setPredicted(await api.getPredictedCurve(meal.id, userId));
+      setPredictability(await api.getPredictability(meal.id, userId));
+    } catch (e) {}
   }, [meal.id, userId]);
 
   useFocusEffect(
@@ -20,6 +31,17 @@ export default function MealDetailScreen({ route, userId }) {
       load();
     }, [load])
   );
+
+  // add / remove / edit food items - saved to the backend, carbs follow the total
+  const saveFoods = async (foods) => {
+    const total = foods.length ? sumCarbs(foods) : meal.usualCarbs;
+    setMeal({ ...meal, foods, usualCarbs: total });
+    setCarbsOverride(String(total));
+    try {
+      const updated = await api.updateMeal(meal.id, { foods });
+      setMeal(updated);
+    } catch (e) {}
+  };
 
   const logNow = async () => {
     setLogging(true);
@@ -37,6 +59,24 @@ export default function MealDetailScreen({ route, userId }) {
     <View style={styles.container}>
       <Text style={styles.title}>{meal.name}</Text>
       <Text style={styles.subtitle}>Usually ~{meal.usualCarbs}g carbs</Text>
+      <PredictabilityBadge data={predictability} />
+
+      {predicted && predicted.curve ? (
+        <View style={styles.predictBox}>
+          <Text style={styles.predictLabel}>
+            Predicted based on past {predicted.count} times
+          </Text>
+          <MiniGlucoseChart
+            glucose={predicted.curve}
+            color="148, 163, 184"
+          />
+        </View>
+      ) : null}
+
+      <View style={styles.foodsBox}>
+        <Text style={styles.sectionTitle}>What's in it</Text>
+        <FoodListEditor foods={meal.foods || []} onChange={saveFoods} />
+      </View>
 
       <View style={styles.logBox}>
         <Text style={styles.label}>Carbs this time (g)</Text>
@@ -79,20 +119,23 @@ export default function MealDetailScreen({ route, userId }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 20 },
-  title: { color: 'white', fontSize: 22, fontWeight: '700' },
-  subtitle: { color: '#94a3b8', fontSize: 13, marginBottom: 16 },
-  logBox: { backgroundColor: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 24 },
-  label: { color: '#cbd5e1', fontSize: 13, marginBottom: 6 },
-  input: { backgroundColor: '#0f172a', color: 'white', borderRadius: 10, padding: 12, marginBottom: 12 },
-  logButton: { backgroundColor: '#22c55e', padding: 14, borderRadius: 10, alignItems: 'center' },
-  buttonText: { color: 'white', fontWeight: '700' },
-  sectionTitle: { color: 'white', fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  hint: { color: '#64748b', fontSize: 12, marginBottom: 12 },
-  logCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, marginBottom: 12 },
+const makeStyles = (c) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg, padding: 20 },
+  title: { color: c.text, fontSize: 22, fontWeight: '700' },
+  subtitle: { color: c.textMuted, fontSize: 13, marginBottom: 16 },
+  foodsBox: { backgroundColor: c.card, borderRadius: 12, padding: 14, marginBottom: 12 },
+  predictBox: { backgroundColor: c.card, borderRadius: 12, padding: 14, marginTop: 12, marginBottom: 12 },
+  predictLabel: { color: c.textMuted, fontSize: 12, fontStyle: 'italic', marginBottom: 6 },
+  logBox: { backgroundColor: c.card, borderRadius: 12, padding: 16, marginBottom: 24 },
+  label: { color: c.textSoft, fontSize: 13, marginBottom: 6 },
+  input: { backgroundColor: c.bg, color: c.text, borderRadius: 10, padding: 12, marginBottom: 12 },
+  logButton: { backgroundColor: c.accent, padding: 14, borderRadius: 10, alignItems: 'center' },
+  buttonText: { color: c.onAccent, fontWeight: '700' },
+  sectionTitle: { color: c.text, fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  hint: { color: c.faint, fontSize: 12, marginBottom: 12 },
+  logCard: { backgroundColor: c.card, borderRadius: 12, padding: 14, marginBottom: 12 },
   logHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  logDate: { color: '#cbd5e1', fontSize: 13 },
-  logCarbs: { color: '#22c55e', fontSize: 13, fontWeight: '600' },
-  note: { color: '#64748b', textAlign: 'center', marginTop: 20 },
+  logDate: { color: c.textSoft, fontSize: 13 },
+  logCarbs: { color: c.accentText, fontSize: 13, fontWeight: '600' },
+  note: { color: c.faint, textAlign: 'center', marginTop: 20 },
 });

@@ -1,19 +1,29 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, FlatList, StyleSheet, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
+import { useTheme } from '../theme';
 import MiniGlucoseChart from '../components/MiniGlucoseChart';
+import PredictabilityBadge from '../components/PredictabilityBadge';
 
 export default function WorkoutDetailScreen({ route, userId }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { workout } = route.params;
   const [logs, setLogs] = useState([]);
   const [duration, setDuration] = useState('30');
   const [notes, setNotes] = useState('');
   const [logging, setLogging] = useState(false);
+  const [predicted, setPredicted] = useState(null);
+  const [predictability, setPredictability] = useState(null);
 
   const load = useCallback(async () => {
     const data = await api.getWorkoutLogs(workout.id, userId);
     setLogs(data);
+    try {
+      setPredicted(await api.getWorkoutPredictedCurve(workout.id, userId));
+      setPredictability(await api.getWorkoutPredictability(workout.id, userId));
+    } catch (e) {}
   }, [workout.id, userId]);
 
   useFocusEffect(
@@ -36,6 +46,14 @@ export default function WorkoutDetailScreen({ route, userId }) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{workout.name}</Text>
+      <PredictabilityBadge data={predictability} />
+
+      {predicted && predicted.curve ? (
+        <View style={styles.predictBox}>
+          <Text style={styles.predictLabel}>Predicted based on past {predicted.count} times</Text>
+          <MiniGlucoseChart glucose={predicted.curve} color="148, 163, 184" />
+        </View>
+      ) : null}
 
       <View style={styles.logBox}>
         <Text style={styles.label}>Duration (minutes)</Text>
@@ -49,7 +67,7 @@ export default function WorkoutDetailScreen({ route, userId }) {
         <TextInput
           style={styles.input}
           placeholder="how it felt, intensity, etc."
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.faint}
           value={notes}
           onChangeText={setNotes}
         />
@@ -87,20 +105,22 @@ export default function WorkoutDetailScreen({ route, userId }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 20 },
-  title: { color: 'white', fontSize: 22, fontWeight: '700', marginBottom: 16 },
-  logBox: { backgroundColor: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 24 },
-  label: { color: '#cbd5e1', fontSize: 13, marginBottom: 6 },
-  input: { backgroundColor: '#0f172a', color: 'white', borderRadius: 10, padding: 12, marginBottom: 12 },
-  logButton: { backgroundColor: '#22c55e', padding: 14, borderRadius: 10, alignItems: 'center' },
-  buttonText: { color: 'white', fontWeight: '700' },
-  sectionTitle: { color: 'white', fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  hint: { color: '#64748b', fontSize: 12, marginBottom: 12 },
-  logCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, marginBottom: 12 },
+const makeStyles = (c) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg, padding: 20 },
+  title: { color: c.text, fontSize: 22, fontWeight: '700', marginBottom: 16 },
+  predictBox: { backgroundColor: c.card, borderRadius: 12, padding: 14, marginTop: 12, marginBottom: 12 },
+  predictLabel: { color: c.textMuted, fontSize: 12, fontStyle: 'italic', marginBottom: 6 },
+  logBox: { backgroundColor: c.card, borderRadius: 12, padding: 16, marginBottom: 24 },
+  label: { color: c.textSoft, fontSize: 13, marginBottom: 6 },
+  input: { backgroundColor: c.bg, color: c.text, borderRadius: 10, padding: 12, marginBottom: 12 },
+  logButton: { backgroundColor: c.accent, padding: 14, borderRadius: 10, alignItems: 'center' },
+  buttonText: { color: c.onAccent, fontWeight: '700' },
+  sectionTitle: { color: c.text, fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  hint: { color: c.faint, fontSize: 12, marginBottom: 12 },
+  logCard: { backgroundColor: c.card, borderRadius: 12, padding: 14, marginBottom: 12 },
   logHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  logDate: { color: '#cbd5e1', fontSize: 13 },
-  logDuration: { color: '#22c55e', fontSize: 13, fontWeight: '600' },
-  logNotes: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
-  note: { color: '#64748b', textAlign: 'center', marginTop: 20 },
+  logDate: { color: c.textSoft, fontSize: 13 },
+  logDuration: { color: c.accentText, fontSize: 13, fontWeight: '600' },
+  logNotes: { color: c.textMuted, fontSize: 12, marginBottom: 8 },
+  note: { color: c.faint, textAlign: 'center', marginTop: 20 },
 });

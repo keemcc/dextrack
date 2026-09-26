@@ -1,11 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, Dimensions } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { api } from '../api';
+import { useTheme } from '../theme';
 
 const screenWidth = Dimensions.get('window').width;
 
 export default function DashboardScreen({ userId, onLogOut }) {
+  const { colors, preference, cyclePreference } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [readings, setReadings] = useState([]);
   const [a1c, setA1c] = useState(null);
   const [dawn, setDawn] = useState(null);
@@ -43,7 +46,14 @@ export default function DashboardScreen({ userId, onLogOut }) {
       contentContainerStyle={{ padding: 20 }}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
     >
-      <Text style={styles.title}>Glucose Trend</Text>
+      <View style={styles.titleRow}>
+        <Text style={styles.title}>Glucose Trend</Text>
+        <TouchableOpacity style={styles.themeButton} onPress={cyclePreference}>
+          <Text style={styles.themeButtonText}>
+            {preference === 'system' ? 'Auto' : preference === 'light' ? 'Light' : 'Dark'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {latest && (
         <View style={styles.latestBox}>
@@ -62,10 +72,10 @@ export default function DashboardScreen({ userId, onLogOut }) {
           withDots={false}
           withInnerLines={false}
           chartConfig={{
-            backgroundGradientFrom: '#0f172a',
-            backgroundGradientTo: '#0f172a',
+            backgroundGradientFrom: colors.bg,
+            backgroundGradientTo: colors.bg,
             color: (opacity = 1) => `rgba(34, 197, 94, ${opacity})`,
-            labelColor: () => '#94a3b8',
+            labelColor: () => colors.textMuted,
             strokeWidth: 2,
           }}
           bezier
@@ -114,27 +124,30 @@ export default function DashboardScreen({ userId, onLogOut }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  title: { color: 'white', fontSize: 22, fontWeight: '700', marginBottom: 16 },
+const makeStyles = (c) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  title: { color: c.text, fontSize: 22, fontWeight: '700' },
+  themeButton: { backgroundColor: c.card, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  themeButtonText: { color: c.textMuted, fontSize: 12, fontWeight: '700' },
   latestBox: { marginBottom: 20 },
-  latestValue: { color: '#22c55e', fontSize: 40, fontWeight: '800' },
-  latestTrend: { color: '#94a3b8', fontSize: 14 },
-  error: { color: '#f87171', marginBottom: 12 },
-  note: { color: '#64748b' },
+  latestValue: { color: c.accentText, fontSize: 40, fontWeight: '800' },
+  latestTrend: { color: c.textMuted, fontSize: 14 },
+  error: { color: c.danger, marginBottom: 12 },
+  note: { color: c.faint },
   cardsRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
-  card: { flex: 1, backgroundColor: '#1e293b', borderRadius: 12, padding: 14 },
-  cardLabel: { color: '#94a3b8', fontSize: 12, marginBottom: 6, textTransform: 'uppercase' },
-  cardValue: { color: '#22c55e', fontSize: 22, fontWeight: '800' },
-  cardSub: { color: '#64748b', fontSize: 11, marginTop: 4 },
-  hint: { color: '#475569', fontSize: 12, marginTop: 24, lineHeight: 17 },
+  card: { flex: 1, backgroundColor: c.card, borderRadius: 12, padding: 14 },
+  cardLabel: { color: c.textMuted, fontSize: 12, marginBottom: 6, textTransform: 'uppercase' },
+  cardValue: { color: c.accentText, fontSize: 22, fontWeight: '800' },
+  cardSub: { color: c.faint, fontSize: 11, marginTop: 4 },
+  hint: { color: c.faintest, fontSize: 12, marginTop: 24, lineHeight: 17 },
   logOutButton: {
     marginTop: 24,
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.faintest,
     alignItems: 'center',
   },
-  logOutText: { color: '#94a3b8', fontWeight: '600' },
+  logOutText: { color: c.textMuted, fontWeight: '600' },
 });
