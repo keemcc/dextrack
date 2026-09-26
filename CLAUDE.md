@@ -68,30 +68,13 @@ mobile/
 - Mobile screens: Login, Dashboard (trend + A1C card + dawn card + Log
   out, which clears the stored userId), Meals
   list -> AddMeal (with USDA search) -> MealDetail (log + history),
-  Workouts (same pattern), Insulin Calc
+  Workouts (same pattern), Insulin Calc, Assistant. Tab bar icons come
+  from `@expo/vector-icons` (Ionicons)
 
-## What to build next (priority order)
-
-### 1. Predicted meal curve (highest priority - this is the demo centerpiece)
-When a meal template has 2+ logged instances, show an averaged glucose
-curve as a preview BEFORE the user logs a new instance of it.
-- Backend: add `GET /meals/:id/predicted-curve?userId=` - pull all past
-  logs' glucose arrays, align them by minutes-from-meal-time (not clock
-  time), average the values at each aligned offset, return as a single
-  curve. Only return one if there are 2+ past instances with data.
-- Mobile: on `MealDetailScreen`, show this as a second dashed/lighter line
-  on a chart above the "I'm eating this now" button, labeled "Predicted
-  based on past X times".
-
-### 2. Meal predictability score
-A consistency label per meal template based on variance across past curves.
-- Backend: add `GET /meals/:id/predictability?userId=` - compute standard
-  deviation of peak glucose value across past instances. Return a label:
-  low stdev (~<20 mg/dL) = "Consistent", higher = "Unpredictable", plus the
-  raw number. Needs 2+ instances or return null/"not enough data".
-- Mobile: show this as a small badge on the `MealsScreen` list rows and at
-  the top of `MealDetailScreen`.
-
+## What to build next
+Nothing pending - both original priorities (predicted meal curve,
+predictability score) are built; see "Added since the brief" below.
+Remaining time goes to on-device testing and demo polish.
 
 ## Known rough edges (leave as-is, not worth fixing in 36 hours)
 - Login is "paste your userId after OAuth" instead of a real deep link -
@@ -141,3 +124,8 @@ A consistency label per meal template based on variance across past curves.
   with `makeStyles(colors)`. Toggle (Auto/Light/Dark) is on the Dashboard.
 - Past windows: `ensureMealWindowsCached` / `ensureWorkoutWindowsCached` pull
   the "after" readings from Dexcom once a window has finished.
+- Long-acting insulin reminders: card on the Insulin Calc tab
+  (`components/InsulinReminders.js`, logic in `mobile/reminders.js`). Daily
+  local notifications via `expo-notifications`, list kept in AsyncStorage.
+  Reminder only - never suggests or changes a dose. `expo-notifications` is
+  loaded in a try/catch, so the rest of the app runs without it.

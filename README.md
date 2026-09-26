@@ -4,7 +4,10 @@ Tracks blood sugar + trends from Dexcom, saves meals and workouts with a
 history of every time you log them (each with the glucose curve from around
 that time), calculates insulin doses using your own ratio and correction
 rule, looks up carbs from USDA's food database, and estimates A1C and dawn
-phenomenon from your cached readings.
+phenomenon from your cached readings. Once a meal or workout has been
+logged twice, it predicts the glucose curve for the next time and rates how
+consistent it is. A Gemini-powered assistant answers "I'm about to eat X"
+questions, and the app can remind you to take long-acting insulin.
 
 ## Structure
 ```
@@ -38,7 +41,7 @@ tailnet via a link.
 **2. Backend** (see `backend/README.md` for full detail)
 ```
 cd backend
-cp .env.example .env      # Dexcom sandbox creds, optionally a USDA key
+cp .env.example .env      # Dexcom sandbox creds, optionally USDA + Gemini keys
 npm install
 npm run dev
 ```
@@ -81,17 +84,30 @@ on), or share just the dev machine with them from the admin console
 
 ## What's in each screen
 - **Dashboard** - live glucose trend, latest reading, estimated A1C, and a
-  dawn-phenomenon summary (average early-morning rise), plus a Log out
-  button that clears the saved userId and returns to the login screen
-- **Meals** - save meal templates (with USDA carb lookup or manual entry),
-  then log each time you actually eat one; each logged instance shows the
-  glucose curve from 30 min before to 3 hours after, so you can compare
-  how the same meal behaves over time
+  dawn-phenomenon summary (average early-morning rise), an Auto/Light/Dark
+  theme toggle, and a Log out button that clears the saved userId and
+  returns to the login screen
+- **Meals** - save meal templates made of one or more foods (with USDA carb
+  lookup or manual entry), then log each time you actually eat one; each
+  logged instance shows the glucose curve from 30 min before to 3 hours
+  after, so you can compare how the same meal behaves over time. With 2+
+  logs, the detail screen shows a predicted curve (the average of past
+  ones) before you log again, and a "Consistent"/"Unpredictable" badge
+  appears on the list and detail screens
 - **Workouts** - same pattern as meals: save a workout, log sessions, see
-  blood sugar from 30 min before to 4 hours after each session
+  blood sugar from 30 min before to 4 hours after each session, with the
+  same predicted curve and consistency badge
+- **Assistant** - chat about what you're about to eat or do. Gemini only
+  reads the message and words the reply; the dose is calculated in code
+  from your saved settings, and any adjustment based on your history is
+  capped at +/-20%. Workouts get a carb suggestion, never an insulin change.
+  Needs `GEMINI_API_KEY` in `backend/.env`
 - **Insulin Calc** - enter your ratio as "1 unit : 8g carbs" and your
   correction as a step rule ("every 50 over target, +1 unit") instead of a
-  raw formula - matches how most people actually think about dosing
+  raw formula - matches how most people actually think about dosing.
+  Settings are saved per meal (breakfast/lunch/dinner/snack) and shared
+  with the assistant. Also holds daily long-acting insulin reminders (local
+  notifications; they only remind, never dose)
 
 ## A note on scope
 This is a sandbox/learning build. If real users' real CGM data ever flows

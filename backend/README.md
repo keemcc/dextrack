@@ -8,9 +8,19 @@ JS — this server sits in between).
 - Runs the Dexcom OAuth2 login flow and stores/refreshes tokens automatically
 - Proxies + locally caches Dexcom glucose readings (`/glucose`, `/glucose/history`)
 - Looks up carbs for a food from USDA FoodData Central (`/food/search`)
-- Stores meal & workout **templates**, plus a **log** of every time you
-  actually ate/did one, each tagged with a glucose window (-30min to
-  +3hr for meals, +4hr for workouts) so you can see the actual effect
+- Stores meal & workout **templates** (meals can hold several foods and
+  be edited), plus a **log** of every time you actually ate/did one, each
+  tagged with a glucose window (-30min to +3hr for meals, +4hr for
+  workouts) so you can see the actual effect
+- Predicts the curve for a meal/workout by averaging past logs, aligned by
+  minutes from the event (`/meals/:id/predicted-curve`,
+  `/workouts/:id/predicted-curve`, needs 2+ logs)
+- Rates consistency as "Consistent" (stdev < 20 mg/dL) or "Unpredictable"
+  (`/meals/:id/predictability` uses peak glucose,
+  `/workouts/:id/predictability` uses the post-workout drop)
+- Runs the assistant chat (`POST /chat`): Gemini parses the message and
+  words the reply, while the dose is computed in code and history-based
+  adjustments are capped at +/-20%
 - Calculates insulin dose from a ratio ("1 unit : 8g carbs") and a
   step-based correction rule ("every 50 over target, +1 unit")
 - Estimates A1C from cached glucose readings (standard eAG formula)
@@ -31,6 +41,10 @@ JS — this server sits in between).
    ```
    cp .env.example .env
    ```
+   For the assistant, also set `GEMINI_API_KEY` (free key at
+   https://aistudio.google.com/apikey). `GEMINI_MODEL` is optional and
+   defaults to `gemini-3.8-flash`. Without a key, everything except the
+   Assistant tab still works.
 5. Install dependencies and run:
    ```
    npm install
