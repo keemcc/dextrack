@@ -40,6 +40,17 @@ JS — this server sits in between).
    flow. Dexcom's sandbox lets you log in with fake test accounts (see their
    docs for sandbox test user credentials).
 
+## Demo data
+A fresh sandbox account has no meal history, so for demos seed some:
+```
+# stop the backend first - it holds db.json in memory and would overwrite the seed
+node seed-demo.js <userId>   # or omit userId to use the most recent login
+npm run dev
+```
+This adds 3 meal templates, each with 4-5 logged instances over the past
+two weeks and a synthetic glucose curve around each one. Re-running
+replaces the previous demo data for that user; real data is untouched.
+
 ## USDA food lookup
 `USDA_API_KEY=DEMO_KEY` works out of the box for testing but is shared by
 everyone using the demo key and rate-limits fast. Get your own free key in

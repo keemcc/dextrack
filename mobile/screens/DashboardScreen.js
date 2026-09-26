@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { api } from '../api';
 
 const screenWidth = Dimensions.get('window').width;
 
-export default function DashboardScreen({ userId }) {
+export default function DashboardScreen({ userId, onLogOut }) {
   const [readings, setReadings] = useState([]);
   const [a1c, setA1c] = useState(null);
   const [dawn, setDawn] = useState(null);
@@ -106,6 +106,10 @@ export default function DashboardScreen({ userId }) {
         production access. A1C and dawn phenomenon get more accurate the more the app is used,
         since they're built from your cached readings over time.
       </Text>
+
+      <TouchableOpacity style={styles.logOutButton} onPress={onLogOut}>
+        <Text style={styles.logOutText}>Log out</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -124,4 +128,13 @@ const styles = StyleSheet.create({
   cardValue: { color: '#22c55e', fontSize: 22, fontWeight: '800' },
   cardSub: { color: '#64748b', fontSize: 11, marginTop: 4 },
   hint: { color: '#475569', fontSize: 12, marginTop: 24, lineHeight: 17 },
+  logOutButton: {
+    marginTop: 24,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+  },
+  logOutText: { color: '#94a3b8', fontWeight: '600' },
 });

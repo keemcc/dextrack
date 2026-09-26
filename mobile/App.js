@@ -69,6 +69,11 @@ export default function App() {
     });
   }, []);
 
+  const logOut = async () => {
+    await AsyncStorage.removeItem('userId');
+    setUserId(null);
+  };
+
   if (checking) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0f172a', justifyContent: 'center' }}>
@@ -92,7 +97,7 @@ export default function App() {
           tabBarInactiveTintColor: '#64748b',
         }}
       >
-        <Tab.Screen name="Dashboard">{() => <DashboardScreen userId={userId} />}</Tab.Screen>
+        <Tab.Screen name="Dashboard">{() => <DashboardScreen userId={userId} onLogOut={logOut} />}</Tab.Screen>
         <Tab.Screen name="Meals">{() => <MealsStackScreen userId={userId} />}</Tab.Screen>
         <Tab.Screen name="Workouts">{() => <WorkoutsStackScreen userId={userId} />}</Tab.Screen>
         <Tab.Screen name="Insulin Calc" component={InsulinCalcScreen} />

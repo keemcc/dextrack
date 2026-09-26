@@ -62,6 +62,10 @@ changing them since `EXPO_PUBLIC_` values are baked into the bundle.
 Open the app, tap "Connect Dexcom Account," log in with a Dexcom sandbox
 test account, then copy the `userId` shown and paste it back into the app.
 
+**5. Seed demo data** (optional, for demos) - with the backend stopped, run
+`node seed-demo.js <userId>` in `backend/`, then start it again. See
+`backend/README.md`.
+
 **Troubleshooting**
 - *"Cannot connect to Expo CLI"* warning after switching apps (e.g. during
   login): Fast Refresh's connection dropped while Expo Go was backgrounded.
@@ -77,7 +81,8 @@ on), or share just the dev machine with them from the admin console
 
 ## What's in each screen
 - **Dashboard** - live glucose trend, latest reading, estimated A1C, and a
-  dawn-phenomenon summary (average early-morning rise)
+  dawn-phenomenon summary (average early-morning rise), plus a Log out
+  button that clears the saved userId and returns to the login screen
 - **Meals** - save meal templates (with USDA carb lookup or manual entry),
   then log each time you actually eat one; each logged instance shows the
   glucose curve from 30 min before to 3 hours after, so you can compare

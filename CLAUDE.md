@@ -30,6 +30,7 @@ A1C estimate, and dawn phenomenon tracking.
 ```
 backend/
   server.js       - all routes live here, single file
+  seed-demo.js    - writes demo meals + synthetic glucose into db.json
   db.json         - created at runtime, gitignored
   .env            - Dexcom + USDA credentials (see .env.example)
 mobile/
@@ -49,14 +50,23 @@ mobile/
 - USDA carb lookup (`/food/search`)
 - Meal templates + logged instances, each instance tagged with a glucose
   window from -30min to +3hr (`/meals`, `/meals/:id/log`, `/meals/:id/logs`)
-- Same pattern for workouts, window is -30min to +4hr (`/workouts...`)
+- Same pattern for workouts, window is -30min to +4hr (`/workouts...`).
+  Windows are always answered from `glucoseHistory` (refreshed from Dexcom
+  first when reachable), so seeded demo readings show up too
+- Demo seed script: `node seed-demo.js [userId]` (defaults to the most
+  recent login) adds 3 meal templates with 4-5 logged instances each and
+  synthetic 5-min EGV curves (peak ~45-75min, back near baseline by 2-3hr)
+  over the past 2 weeks. Pizza is deliberately inconsistent. Seeded records
+  carry `demo: true` and are replaced on re-run. Stop the backend first -
+  lowdb holds db.json in memory and would overwrite the seed
 - Insulin calculator using a ratio ("1 unit : 8g carbs") and a step-based
   correction ("every 50 over target, +1 unit") - NOT a continuous formula
   (`POST /calculate-dose`)
 - A1C estimate from cached glucose history, standard eAG formula (`/a1c`)
 - Dawn phenomenon: average glucose rise 3am-8am across recent days
   (`/dawn-phenomenon`)
-- Mobile screens: Login, Dashboard (trend + A1C card + dawn card), Meals
+- Mobile screens: Login, Dashboard (trend + A1C card + dawn card + Log
+  out, which clears the stored userId), Meals
   list -> AddMeal (with USDA search) -> MealDetail (log + history),
   Workouts (same pattern), Insulin Calc
 
@@ -82,14 +92,6 @@ A consistency label per meal template based on variance across past curves.
 - Mobile: show this as a small badge on the `MealsScreen` list rows and at
   the top of `MealDetailScreen`.
 
-### 3. Demo data seed script (needed regardless of priority 1/2 status)
-A script (`backend/seed-demo.js`, run with `node seed-demo.js`) that, given
-a userId already connected via sandbox OAuth, creates 2-3 meal templates
-and 3-5 logged instances each with synthetic-but-realistic glucose curves
-written directly into `db.json`'s `glucoseHistory` (don't call the real
-Dexcom API for this - just fabricate plausible EGV-shaped data: gentle
-rise after eating, peak ~45-60min in, gradual return to baseline by 2-3hr).
-This is critical for the live demo - a fresh account has no history to show.
 
 ## Known rough edges (leave as-is, not worth fixing in 36 hours)
 - Login is "paste your userId after OAuth" instead of a real deep link -

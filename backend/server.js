@@ -188,22 +188,24 @@ async function getGlucoseWindow(userId, centerTime, minutesBefore, minutesAfter)
   const start = new Date(center.getTime() - minutesBefore * 60 * 1000);
   const end = new Date(center.getTime() - -minutesAfter * 60 * 1000); // +minutesAfter
 
+  // Refresh the cache from Dexcom if we can, then always answer from the
+  // cache - it holds everything Dexcom returned plus seeded demo readings.
   try {
-    const records = await fetchAndCacheGlucose(userId, start.toISOString(), end.toISOString());
-    return records;
+    await fetchAndCacheGlucose(userId, start.toISOString(), end.toISOString());
   } catch (err) {
-    // fall back to whatever's cached locally for that window
-    return db
-      .get('glucoseHistory')
-      .filter(
-        (r) =>
-          r.userId === userId &&
-          new Date(r.systemTime) >= start &&
-          new Date(r.systemTime) <= end
-      )
-      .sortBy('systemTime')
-      .value();
+    // Dexcom unreachable - whatever's cached for the window will have to do
   }
+
+  return db
+    .get('glucoseHistory')
+    .filter(
+      (r) =>
+        r.userId === userId &&
+        new Date(r.systemTime) >= start &&
+        new Date(r.systemTime) <= end
+    )
+    .sortBy('systemTime')
+    .value();
 }
 
 // =====================================================================
