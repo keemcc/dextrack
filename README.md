@@ -84,7 +84,9 @@ on), or share just the dev machine with them from the admin console
 (Machines -> ... -> Share).
 
 ## What's in each screen
-- **Dashboard** - live glucose trend, latest reading, estimated A1C, and a
+- **Dashboard** - current reading in a range-colored circle with a trend
+  arrow, recent change and "updated X ago" (refreshes every 5 min), the
+  glucose trend, estimated A1C, and a
   dawn-phenomenon summary (average early-morning rise), a theme toggle
   (Dark by default, or Auto/Light), plus a Log out button that clears the
   saved userId and returns to the login screen
@@ -93,10 +95,12 @@ on), or share just the dev machine with them from the admin console
   actually eat one; each logged instance shows the glucose curve from
   30 min before to 3 hours after, so you can compare how the same meal
   behaves over time. After 2+ logs a meal shows a predicted curve (the
-  average of past ones) and a "Consistent"/"Unpredictable" badge
+  average of past ones) and a "Consistent"/"Unpredictable" badge. Delete a
+  meal (and its history) with the trash icon, a long-press, or the button
+  on its detail screen
 - **Workouts** - same pattern as meals: save a workout, log sessions, see
   blood sugar from 30 min before to 4 hours after each session, with the
-  same predicted curve and badge
+  same predicted curve, badge and delete options
 - **Assistant** - describe what you're about to eat or do; it estimates
   carbs, matches your saved meals, and shows the calculated dose (plus a
   small, capped adjustment if past logs of that meal ran high or low). For

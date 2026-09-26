@@ -50,6 +50,8 @@ mobile/
   components/FoodListEditor.js       - add/remove/edit a meal's food items
   components/InsulinReminders.js     - reminders card on the Insulin Calc tab
   components/KeyboardAvoid.js        - keeps text boxes above the keyboard
+  components/CurrentGlucose.js       - Dashboard's current reading + trend
+  components/confirm.js              - cross-platform confirm dialog
   screens/        - one file per screen, plain functional components
 ```
 
@@ -107,9 +109,22 @@ mobile/
   daily local notification (`expo-notifications`); the list is kept in
   AsyncStorage. Reminder only - never suggests or changes a dose. The
   package is loaded in a try/catch, so the rest of the app runs without it
+- Current glucose on the Dashboard (`components/CurrentGlucose.js`): latest
+  reading in a range-colored circle with a trend arrow (Dexcom's trend, or
+  guessed from the ~15-min change), the recent change and "updated X ago".
+  Refreshes every 5 min; with nothing in the last 6h it shows the most
+  recent 3h of cached/demo readings
+- Delete meals/workouts: `DELETE /meals/:id`, `DELETE /workouts/:id` (also
+  remove their logs). Trash icon or long-press on list rows, and a button
+  on detail screens, both behind a confirm (`components/confirm.js`)
+- Dev-only fake live readings: `POST /dev/glucose { userId, scenario }`
+  writes 3h of 5-min readings ending now, tagged `dev: true` and replaced
+  on each call. Scenarios: rising-fast, rising-slow, steady, falling-slow,
+  falling-fast, low, high. Only registered when `ENABLE_DEV_ENDPOINTS=true`
+  in `backend/.env`
 - Keyboard handling: forms use `components/KeyboardAvoid.js` so inputs
   stay above the keyboard; the tab bar hides while typing
-- Mobile screens: Login, Dashboard (trend + A1C card + dawn card + theme
+- Mobile screens: Login, Dashboard (current reading + trend + A1C card + dawn card + theme
   toggle + Log out, which clears the stored userId), Meals
   list -> AddMeal (USDA search + food list) -> MealDetail (predicted
   curve, food list, log + history), Workouts (same pattern), Assistant,

@@ -11,7 +11,8 @@ JS — this server sits in between).
 - Stores meal & workout **templates**, plus a **log** of every time you
   actually ate/did one, each tagged with a glucose window (-30min to
   +3hr for meals, +4hr for workouts) so you can see the actual effect.
-  Meals are a list of foods (`PUT /meals/:id` edits it)
+  Meals are a list of foods (`PUT /meals/:id` edits it).
+  `DELETE /meals/:id` and `DELETE /workouts/:id` remove a template and its logs
 - Predicts the next curve for a meal/workout by averaging past windows
   (`/meals/:id/predicted-curve`, `/workouts/:id/predicted-curve`) and rates
   its consistency (`/meals/:id/predictability`,
@@ -60,6 +61,19 @@ This adds 3 meal templates (each with a food list), each with 4-5 logged
 instances over the past two weeks and a synthetic glucose curve around
 each one. Re-running replaces the previous demo data for that user; real
 data is untouched.
+
+## Testing the Dashboard trend (dev only)
+Sandbox data isn't live, so to see each trend arrow set
+`ENABLE_DEV_ENDPOINTS=true` in `.env`, restart, and fake the last 3 hours:
+```
+curl -X POST <your backend URL>/dev/glucose \
+  -H 'Content-Type: application/json' \
+  -d '{"userId": "<userId>", "scenario": "rising-fast"}'
+```
+Scenarios: `rising-fast`, `rising-slow`, `steady`, `falling-slow`,
+`falling-fast`, `low`, `high`. Each call replaces the previous fake
+readings (tagged `dev: true`). Leave the flag off otherwise - the route
+isn't registered without it.
 
 ## Gemini assistant
 `/chat` needs `GEMINI_API_KEY` in `.env` (get one at
