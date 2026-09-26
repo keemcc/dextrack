@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# secrets and local data (Dexcom/USDA/Gemini keys, plaintext tokens)
+.env
+.env.*
+!.env.example
+backend/db.json
+db.json
+
+# Expo / React Native
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# logs and OS files
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db

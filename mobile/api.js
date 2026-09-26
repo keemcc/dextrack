@@ -1,7 +1,7 @@
 // Point this at your backend. If testing on a physical phone with Expo Go,
 // "localhost" won't reach your computer - use your computer's LAN IP instead,
 // e.g. "http://192.168.1.42:4000" (find it with `ipconfig`/`ifconfig`).
-export const API_BASE_URL = 'http://localhost:4000';
+export const API_BASE_URL = 'http://192.168.56.1:4000';
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE_URL}${path}`, {
