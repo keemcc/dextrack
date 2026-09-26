@@ -13,7 +13,7 @@ export default function ChatScreen({ userId }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [messages, setMessages] = useState([
-    { id: 'hi', from: 'bot', text: 'Hi! Tell me what you\'re about to eat or do (and set your current glucose above if you know it), e.g. "chicken alfredo".' },
+    { id: 'hi', from: 'bot', text: 'Hi! Tell me what you\'re about to eat or do (I'll use your live glucose reading, or you can type one above), e.g. "chicken alfredo".' },
   ]);
   const [input, setInput] = useState('');
   const [glucose, setGlucose] = useState('');
@@ -49,13 +49,13 @@ export default function ChatScreen({ userId }) {
     <KeyboardAvoid style={styles.container}>
       <Text style={styles.title}>Meal Assistant</Text>
       <View style={styles.glucoseRow}>
-        <Text style={styles.glucoseLabel}>Current glucose (mg/dL)</Text>
+        <Text style={styles.glucoseLabel}>Glucose override (blank = live reading)</Text>
         <TextInput
           style={styles.glucoseInput}
           keyboardType="numeric"
           value={glucose}
           onChangeText={setGlucose}
-          placeholder="120"
+          placeholder="live"
           placeholderTextColor={colors.faintest}
         />
       </View>
@@ -84,6 +84,13 @@ export default function ChatScreen({ userId }) {
                 <Text style={styles.doseSub}>
                   {MEAL_TYPE_LABELS[item.data.mealType]}: 1u:{item.data.settingsUsed.ratioCarbs}g, +{item.data.settingsUsed.correctionStepUnits}u per {item.data.settingsUsed.correctionStepAmount} over {item.data.settingsUsed.target}
                 </Text>
+                {item.data.glucose ? (
+                  <Text style={styles.doseSub}>
+                    {item.data.glucose.value != null
+                      ? `Glucose used: ${item.data.glucose.value} mg/dL (${item.data.glucose.source === 'live' ? 'live reading' : 'entered'})`
+                      : 'No current glucose - no correction added'}
+                  </Text>
+                ) : null}
                 {item.data.usingDefaults ? (
                   <Text style={styles.adjust}>
                     Using default settings - set your own ratio on the Insulin Calc tab for accurate doses.
