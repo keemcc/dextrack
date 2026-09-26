@@ -210,25 +210,33 @@ async function getGlucoseWindow(userId, centerTime, minutesBefore, minutesAfter)
     .value();
 }
 
-// Pull in the Dexcom data for any past meal windows that were logged before their
-// 3 hours had finished (so the "after" part was not cached yet).
-async function ensureMealWindowsCached(mealId, userId) {
-  const logs = db.get('mealLogs').filter({ mealId, userId }).value();
+// Pull in the Dexcom data for any past windows that were logged before they had
+// finished (so the "after" part was not cached yet). Each log is fetched once
+// after its window ends, then flagged `windowCached` so later calls skip Dexcom.
+async function ensureWindowsCached(collection, idField, id, userId, afterMinutes) {
+  const logs = db.get(collection).filter({ [idField]: id, userId }).value();
   await Promise.all(
     logs
-      .filter((l) => new Date(l.loggedAt).getTime() + 180 * 60000 < Date.now())
-      .map((l) => getGlucoseWindow(userId, l.loggedAt, 30, 180).catch(() => {}))
+      .filter((l) => !l.windowCached && new Date(l.loggedAt).getTime() + afterMinutes * 60000 < Date.now())
+      .map(async (l) => {
+        const center = new Date(l.loggedAt).getTime();
+        try {
+          await fetchAndCacheGlucose(
+            userId,
+            new Date(center - 30 * 60000).toISOString(),
+            new Date(center + afterMinutes * 60000).toISOString()
+          );
+          db.get(collection).find({ id: l.id }).assign({ windowCached: true }).write();
+        } catch (err) {
+          // Dexcom unreachable - try again next time, answer from the cache for now
+        }
+      })
   );
 }
 
-async function ensureWorkoutWindowsCached(workoutId, userId) {
-  const logs = db.get('workoutLogs').filter({ workoutId, userId }).value();
-  await Promise.all(
-    logs
-      .filter((l) => new Date(l.loggedAt).getTime() + 240 * 60000 < Date.now())
-      .map((l) => getGlucoseWindow(userId, l.loggedAt, 30, 240).catch(() => {}))
-  );
-}
+const ensureMealWindowsCached = (mealId, userId) => ensureWindowsCached('mealLogs', 'mealId', mealId, userId, 180);
+const ensureWorkoutWindowsCached = (workoutId, userId) =>
+  ensureWindowsCached('workoutLogs', 'workoutId', workoutId, userId, 240);
 
 // Cache-only version of the meal window, with each reading tagged by minutes
 // from the meal time. Used by the prediction/predictability endpoints.

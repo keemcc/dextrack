@@ -32,6 +32,11 @@ export default function MealDetailScreen({ route, userId }) {
     }, [load])
   );
 
+  // Meals saved before food lists existed have no `foods` - start them with one item
+  // holding the old carb total, so adding a food adds to it instead of replacing it
+  const foodsForEditor =
+    meal.foods || (meal.usualCarbs ? [{ id: 'original', name: meal.name, carbs: meal.usualCarbs }] : []);
+
   // add / remove / edit food items - saved to the backend, carbs follow the total
   const saveFoods = async (foods) => {
     const total = foods.length ? sumCarbs(foods) : meal.usualCarbs;
@@ -75,7 +80,7 @@ export default function MealDetailScreen({ route, userId }) {
 
       <View style={styles.foodsBox}>
         <Text style={styles.sectionTitle}>What's in it</Text>
-        <FoodListEditor foods={meal.foods || []} onChange={saveFoods} />
+        <FoodListEditor foods={foodsForEditor} onChange={saveFoods} />
       </View>
 
       <View style={styles.logBox}>

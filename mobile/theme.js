@@ -43,11 +43,12 @@ export const palettes = {
 };
 
 const KEY = 'themePreference'; // 'system' | 'light' | 'dark'
-const ThemeContext = createContext({ colors: palettes.dark, preference: 'system', cyclePreference: () => {} });
+const ThemeContext = createContext({ colors: palettes.dark, preference: 'dark', cyclePreference: () => {} });
 
 export function ThemeProvider({ children }) {
   const system = useColorScheme(); // follows the phone's setting
-  const [preference, setPreference] = useState('system');
+  // Dark is the app's look (and the demo's) - Auto/Light are opt-in from the Dashboard
+  const [preference, setPreference] = useState('dark');
 
   useEffect(() => {
     AsyncStorage.getItem(KEY)

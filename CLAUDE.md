@@ -12,6 +12,7 @@ A1C estimate, and dawn phenomenon tracking.
   Dexcom's `/v3/users/self/egvs` glucose endpoint, proxies USDA FoodData
   Central for carb lookup, stores everything in a local JSON file via
   `lowdb` (v1, CommonJS API - `db.get('collection').push(...).write()` style).
+  Also calls Google Gemini (plain REST via axios) for the chat assistant.
 - `mobile/` - Expo SDK 57 (React Native 0.86, React 19), JS not TypeScript.
   Bottom tab navigation (`@react-navigation/bottom-tabs` v7) with a native
   stack navigator nested inside the Meals and Workouts tabs for list ->
@@ -40,7 +41,12 @@ mobile/
   .env.local      - EXPO_PUBLIC_API_URL + REACT_NATIVE_PACKAGER_HOSTNAME,
                     gitignored (see .env.example; must be .env.local, Expo
                     rejects the packager hostname in a plain .env)
-  components/MiniGlucoseChart.js  - reusable chart for a glucose window
+  theme.js        - light/dark palettes + `useTheme()`; screens build styles
+                    with `makeStyles(colors)`
+  settings.js     - per-meal-slot insulin settings in AsyncStorage
+  components/MiniGlucoseChart.js     - reusable chart for a glucose window
+  components/PredictabilityBadge.js  - "Consistent"/"Unpredictable" pill
+  components/FoodListEditor.js       - add/remove/edit a meal's food items
   screens/        - one file per screen, plain functional components
 ```
 
@@ -65,32 +71,42 @@ mobile/
 - A1C estimate from cached glucose history, standard eAG formula (`/a1c`)
 - Dawn phenomenon: average glucose rise 3am-8am across recent days
   (`/dawn-phenomenon`)
-- Mobile screens: Login, Dashboard (trend + A1C card + dawn card + Log
-  out, which clears the stored userId), Meals
-  list -> AddMeal (with USDA search) -> MealDetail (log + history),
-  Workouts (same pattern), Insulin Calc
+- Predicted curves: `GET /meals/:id/predicted-curve` and
+  `GET /workouts/:id/predicted-curve` average past logs' windows aligned by
+  minutes from the event (5-min buckets); `curve: null` under 2 logs with
+  data. Shown as a lighter grey chart on the detail screens, labeled
+  "Predicted based on past X times"
+- Predictability: `GET /meals/:id/predictability` (stdev of peak glucose)
+  and `GET /workouts/:id/predictability` (stdev of the post-workout drop).
+  "Consistent" if stdev < 20 mg/dL, else "Unpredictable"; needs 2+ logs.
+  Badge on list rows and detail screens
+- Past windows: `ensureMealWindowsCached` / `ensureWorkoutWindowsCached`
+  fetch a log's full window from Dexcom once it has finished, then flag
+  the log `windowCached: true` so later requests answer from the cache
+- Multi-item meals: meals have `foods: [{id, name, carbs}]` and
+  `usualCarbs` is their sum. `POST /meals` takes `foods`; `PUT /meals/:id`
+  edits them. Meals saved before this (no `foods`) show their old total as
+  one starting item in the editor
+- Gemini assistant: `POST /chat` + Assistant tab. Gemini only parses the
+  message (meal/workout, carbs, matching saved meal) and words the reply;
+  the dose comes from `computeDose` (shared with `/calculate-dose`), and
+  history-based adjustments are fixed rules capped at +/-15%
+  (`suggestAdjustment`). Workouts get a carb suggestion, never an insulin
+  change. Needs `GEMINI_API_KEY` (optional `GEMINI_MODEL`) in
+  `backend/.env`
+- Insulin settings are saved per meal slot (breakfast/lunch/dinner/snack)
+  in AsyncStorage, shared by Insulin Calc and the assistant
+- Light/dark theme: dark by default; Dashboard toggle cycles
+  Auto/Light/Dark and is remembered in AsyncStorage
+- Mobile screens: Login, Dashboard (trend + A1C card + dawn card + theme
+  toggle + Log out, which clears the stored userId), Meals
+  list -> AddMeal (USDA search + food list) -> MealDetail (predicted
+  curve, food list, log + history), Workouts (same pattern), Assistant,
+  Insulin Calc
 
-## What to build next (priority order)
-
-### 1. Predicted meal curve (highest priority - this is the demo centerpiece)
-When a meal template has 2+ logged instances, show an averaged glucose
-curve as a preview BEFORE the user logs a new instance of it.
-- Backend: add `GET /meals/:id/predicted-curve?userId=` - pull all past
-  logs' glucose arrays, align them by minutes-from-meal-time (not clock
-  time), average the values at each aligned offset, return as a single
-  curve. Only return one if there are 2+ past instances with data.
-- Mobile: on `MealDetailScreen`, show this as a second dashed/lighter line
-  on a chart above the "I'm eating this now" button, labeled "Predicted
-  based on past X times".
-
-### 2. Meal predictability score
-A consistency label per meal template based on variance across past curves.
-- Backend: add `GET /meals/:id/predictability?userId=` - compute standard
-  deviation of peak glucose value across past instances. Return a label:
-  low stdev (~<20 mg/dL) = "Consistent", higher = "Unpredictable", plus the
-  raw number. Needs 2+ instances or return null/"not enough data".
-- Mobile: show this as a small badge on the `MealsScreen` list rows and at
-  the top of `MealDetailScreen`.
+## What to build next
+Nothing queued - the brief's planned features are built. Add new items
+here in priority order.
 
 
 ## Known rough edges (leave as-is, not worth fixing in 36 hours)
@@ -107,7 +123,8 @@ A consistency label per meal template based on variance across past curves.
 - This is a 36-hour hackathon build. Prioritize working + demoable over
   complete or elegant. Don't add new dependencies unless clearly necessary.
 - Keep the dark theme (`#0f172a` background, `#22c55e` green accent,
-  `#1e293b` card backgrounds) consistent with existing screens.
+  `#1e293b` card backgrounds) as the default look. Take colors from
+  `useTheme()` rather than hardcoding them, so light mode keeps working.
 - Keep the markdown docs (`CLAUDE.md`, `README.md`, `backend/README.md`)
   in sync with the code. When a change affects setup steps, env vars,
   routes, dependencies/versions, or what's built vs. still to do, update
@@ -117,27 +134,3 @@ A consistency label per meal template based on variance across past curves.
 - Dexcom sandbox and USDA API keys are the developer's own - don't attempt
   to sign up for accounts or generate credentials; ask if `.env` is missing
   values rather than guessing or hardcoding placeholders that look real.
-
-## Added since the brief (predictions, assistant, themes)
-- Predicted meal + workout curves: `GET /meals/:id/predicted-curve`,
-  `GET /workouts/:id/predicted-curve` (2+ logs; averaged by minutes from the
-  event). Shown as a lighter line on the detail screens.
-- Predictability badge: `GET /meals/:id/predictability`,
-  `GET /workouts/:id/predictability` ("Consistent" if stdev < 20 mg/dL; for
-  workouts it's the stdev of the post-workout drop). Badge on list + detail.
-- Multi-item meals: meals have `foods: [{id, name, carbs}]`, `usualCarbs` is
-  their sum. `POST /meals` takes `foods`; `PUT /meals/:id` edits them.
-  UI: `components/FoodListEditor.js` (Add Meal + Meal Detail).
-- Gemini assistant: `POST /chat` + Assistant tab. Gemini only parses the
-  message (meal/workout, carbs, matches a saved meal) and words the reply;
-  the dose is computed in code (`computeDose`) and history-based adjustments
-  are bounded (+/-20%, `suggestAdjustment`). Workouts get a carb suggestion,
-  never an insulin change. Needs `GEMINI_API_KEY` (optional `GEMINI_MODEL`,
-  default `gemini-3.8-flash`) in `backend/.env`.
-- Insulin settings are saved per meal slot (breakfast/lunch/dinner/snack) in
-  AsyncStorage (`mobile/settings.js`), shared by Insulin Calc and the
-  assistant.
-- Light/dark theme: `mobile/theme.js` (`useTheme()`); screens build styles
-  with `makeStyles(colors)`. Toggle (Auto/Light/Dark) is on the Dashboard.
-- Past windows: `ensureMealWindowsCached` / `ensureWorkoutWindowsCached` pull
-  the "after" readings from Dexcom once a window has finished.

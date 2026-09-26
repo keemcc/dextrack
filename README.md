@@ -4,7 +4,10 @@ Tracks blood sugar + trends from Dexcom, saves meals and workouts with a
 history of every time you log them (each with the glucose curve from around
 that time), calculates insulin doses using your own ratio and correction
 rule, looks up carbs from USDA's food database, and estimates A1C and dawn
-phenomenon from your cached readings.
+phenomenon from your cached readings. Once a meal or workout has been
+logged a few times, it predicts the curve for next time and rates how
+consistent it is. A chat assistant (Google Gemini) turns "what I'm about
+to eat" into a carb estimate and a calculated dose.
 
 ## Structure
 ```
@@ -38,7 +41,7 @@ tailnet via a link.
 **2. Backend** (see `backend/README.md` for full detail)
 ```
 cd backend
-cp .env.example .env      # Dexcom sandbox creds, optionally a USDA key
+cp .env.example .env      # Dexcom sandbox creds, Gemini key, optionally a USDA key
 npm install
 npm run dev
 ```
@@ -81,17 +84,27 @@ on), or share just the dev machine with them from the admin console
 
 ## What's in each screen
 - **Dashboard** - live glucose trend, latest reading, estimated A1C, and a
-  dawn-phenomenon summary (average early-morning rise), plus a Log out
-  button that clears the saved userId and returns to the login screen
-- **Meals** - save meal templates (with USDA carb lookup or manual entry),
-  then log each time you actually eat one; each logged instance shows the
-  glucose curve from 30 min before to 3 hours after, so you can compare
-  how the same meal behaves over time
+  dawn-phenomenon summary (average early-morning rise), a theme toggle
+  (Dark by default, or Auto/Light), plus a Log out button that clears the
+  saved userId and returns to the login screen
+- **Meals** - save meal templates as a list of foods (USDA carb lookup or
+  manual entry; the meal's carbs are the total), then log each time you
+  actually eat one; each logged instance shows the glucose curve from
+  30 min before to 3 hours after, so you can compare how the same meal
+  behaves over time. After 2+ logs a meal shows a predicted curve (the
+  average of past ones) and a "Consistent"/"Unpredictable" badge
 - **Workouts** - same pattern as meals: save a workout, log sessions, see
-  blood sugar from 30 min before to 4 hours after each session
+  blood sugar from 30 min before to 4 hours after each session, with the
+  same predicted curve and badge
+- **Assistant** - describe what you're about to eat or do; it estimates
+  carbs, matches your saved meals, and shows the calculated dose (plus a
+  small, capped adjustment if past logs of that meal ran high or low). For
+  workouts it only suggests carbs, never insulin changes
 - **Insulin Calc** - enter your ratio as "1 unit : 8g carbs" and your
   correction as a step rule ("every 50 over target, +1 unit") instead of a
-  raw formula - matches how most people actually think about dosing
+  raw formula - matches how most people actually think about dosing.
+  Settings are saved per meal (breakfast/lunch/dinner/snack) and shared
+  with the Assistant
 
 ## A note on scope
 This is a sandbox/learning build. If real users' real CGM data ever flows

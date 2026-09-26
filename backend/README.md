@@ -10,9 +10,17 @@ JS — this server sits in between).
 - Looks up carbs for a food from USDA FoodData Central (`/food/search`)
 - Stores meal & workout **templates**, plus a **log** of every time you
   actually ate/did one, each tagged with a glucose window (-30min to
-  +3hr for meals, +4hr for workouts) so you can see the actual effect
+  +3hr for meals, +4hr for workouts) so you can see the actual effect.
+  Meals are a list of foods (`PUT /meals/:id` edits it)
+- Predicts the next curve for a meal/workout by averaging past windows
+  (`/meals/:id/predicted-curve`, `/workouts/:id/predicted-curve`) and rates
+  its consistency (`/meals/:id/predictability`,
+  `/workouts/:id/predictability`) - both need 2+ logged instances
 - Calculates insulin dose from a ratio ("1 unit : 8g carbs") and a
   step-based correction rule ("every 50 over target, +1 unit")
+- Chat assistant (`POST /chat`) - Gemini reads the message and writes the
+  reply, but the dose is always computed by the same code as
+  `/calculate-dose`
 - Estimates A1C from cached glucose readings (standard eAG formula)
 - Estimates dawn phenomenon (average glucose rise, 3am-8am) from cached readings
 
@@ -47,9 +55,16 @@ A fresh sandbox account has no meal history, so for demos seed some:
 node seed-demo.js <userId>   # or omit userId to use the most recent login
 npm run dev
 ```
-This adds 3 meal templates, each with 4-5 logged instances over the past
-two weeks and a synthetic glucose curve around each one. Re-running
-replaces the previous demo data for that user; real data is untouched.
+This adds 3 meal templates (each with a food list), each with 4-5 logged
+instances over the past two weeks and a synthetic glucose curve around
+each one. Re-running replaces the previous demo data for that user; real
+data is untouched.
+
+## Gemini assistant
+`/chat` needs `GEMINI_API_KEY` in `.env` (get one at
+https://aistudio.google.com/apikey). `GEMINI_MODEL` is optional and
+overrides the default model set in `server.js`. Without a key, every other
+route still works - only the Assistant tab returns an error.
 
 ## USDA food lookup
 `USDA_API_KEY=DEMO_KEY` works out of the box for testing but is shared by

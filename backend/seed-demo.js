@@ -28,7 +28,11 @@ db.defaults({
 const DEMO_MEALS = [
   {
     name: 'Oatmeal with berries',
-    usualCarbs: 45,
+    foods: [
+      { name: 'Rolled oats', carbs: 30 },
+      { name: 'Blueberries', carbs: 10 },
+      { name: 'Honey', carbs: 5 },
+    ],
     hour: 7.5,
     days: [1, 4, 6, 9, 12],
     rise: [55, 65],
@@ -36,7 +40,12 @@ const DEMO_MEALS = [
   },
   {
     name: 'Chicken burrito bowl',
-    usualCarbs: 75,
+    foods: [
+      { name: 'White rice', carbs: 45 },
+      { name: 'Black beans', carbs: 20 },
+      { name: 'Corn salsa', carbs: 10 },
+      { name: 'Grilled chicken', carbs: 0 },
+    ],
     hour: 12.5,
     days: [2, 5, 8, 11],
     rise: [80, 95],
@@ -44,7 +53,7 @@ const DEMO_MEALS = [
   },
   {
     name: 'Pepperoni pizza (3 slices)',
-    usualCarbs: 90,
+    foods: [{ name: 'Pepperoni pizza slice x3', carbs: 90 }],
     hour: 19,
     days: [3, 7, 10, 13],
     rise: [45, 130],
@@ -135,11 +144,15 @@ db.get('glucoseHistory').remove({ userId, demo: true }).write();
 
 const now = new Date();
 DEMO_MEALS.forEach((demoMeal) => {
+  // Same shape the app saves: usualCarbs is the sum of the food items
+  const foods = demoMeal.foods.map((f) => ({ id: uuidv4(), ...f }));
+  const usualCarbs = foods.reduce((a, f) => a + f.carbs, 0);
   const meal = {
     id: uuidv4(),
     userId,
     name: demoMeal.name,
-    usualCarbs: demoMeal.usualCarbs,
+    usualCarbs,
+    foods,
     createdAt: now.getTime() - 14 * 24 * 60 * 60 * 1000,
     demo: true,
   };
@@ -155,7 +168,7 @@ DEMO_MEALS.forEach((demoMeal) => {
         id: uuidv4(),
         mealId: meal.id,
         userId,
-        carbs: demoMeal.usualCarbs + Math.round(between(-5, 5)),
+        carbs: usualCarbs + Math.round(between(-5, 5)),
         loggedAt: loggedAt.toISOString(),
       })
       .write();
