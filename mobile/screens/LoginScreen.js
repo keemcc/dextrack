@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Linking, StyleSheet } from 'react-native';
 import { useTheme } from '../theme';
+import KeyboardScrollScreen, { KeyboardAvoid } from '../components/KeyboardAvoid';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../api';
 
@@ -20,7 +22,7 @@ export default function LoginScreen({ onLoggedIn }) {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardScrollScreen contentStyle={styles.container}>
       <Text style={styles.title}>Connect your Dexcom</Text>
       <Text style={styles.body}>
         1. Tap the button below - it opens Dexcom's login in your browser.{'\n'}
@@ -49,12 +51,12 @@ export default function LoginScreen({ onLoggedIn }) {
         Note: this paste-the-userId step is just for early dev/testing. Swap it for a proper
         deep link (Dexcom redirects straight back into the app) once the basics work.
       </Text>
-    </View>
+    </KeyboardScrollScreen>
   );
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.bg, padding: 24, justifyContent: 'center' },
+  container: { flexGrow: 1, padding: 24, justifyContent: 'center' },
   title: { color: c.text, fontSize: 24, fontWeight: '700', marginBottom: 12 },
   body: { color: c.textSoft, fontSize: 14, lineHeight: 20, marginBottom: 24 },
   button: {

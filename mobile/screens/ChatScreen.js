@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { loadAllSettings, MEAL_TYPE_LABELS } from '../settings';
 
 // Uses the ratio/correction settings the user saved on the Insulin Calc tab (defaults 1:8, 50/1, target 120).
@@ -45,7 +46,7 @@ export default function ChatScreen({ userId }) {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoid style={styles.container}>
       <Text style={styles.title}>Meal Assistant</Text>
       <View style={styles.glucoseRow}>
         <Text style={styles.glucoseLabel}>Current glucose (mg/dL)</Text>
@@ -117,7 +118,7 @@ export default function ChatScreen({ userId }) {
         </TouchableOpacity>
       </View>
       <Text style={styles.disclaimer}>School project, not medical advice. Confirm doses with your care team.</Text>
-    </KeyboardAvoidingView>
+    </KeyboardAvoid>
   );
 }
 

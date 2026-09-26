@@ -7,7 +7,8 @@ rule, looks up carbs from USDA's food database, and estimates A1C and dawn
 phenomenon from your cached readings. Once a meal or workout has been
 logged a few times, it predicts the curve for next time and rates how
 consistent it is. A chat assistant (Google Gemini) turns "what I'm about
-to eat" into a carb estimate and a calculated dose.
+to eat" into a carb estimate and a calculated dose. The app can also
+remind you daily to take long-acting insulin.
 
 ## Structure
 ```
@@ -104,7 +105,8 @@ on), or share just the dev machine with them from the admin console
   correction as a step rule ("every 50 over target, +1 unit") instead of a
   raw formula - matches how most people actually think about dosing.
   Settings are saved per meal (breakfast/lunch/dinner/snack) and shared
-  with the Assistant
+  with the Assistant. Also holds daily long-acting insulin reminders
+  (phone notifications - they only remind, never dose)
 
 ## A note on scope
 This is a sandbox/learning build. If real users' real CGM data ever flows

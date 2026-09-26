@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { ThemeProvider, useTheme } from './theme';
 import LoginScreen from './screens/LoginScreen';
@@ -62,6 +63,11 @@ function WorkoutsStackScreen({ userId }) {
   );
 }
 
+// Filled icon when the tab is selected, outline otherwise
+const tabIcon = (name) => ({ color, size, focused }) => (
+  <Ionicons name={focused ? name : `${name}-outline`} size={size} color={color} />
+);
+
 function AppInner() {
   const { colors } = useTheme();
   const [userId, setUserId] = useState(null);
@@ -112,13 +118,41 @@ function AppInner() {
           tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.border },
           tabBarActiveTintColor: colors.accentText,
           tabBarInactiveTintColor: colors.faint,
+          tabBarHideOnKeyboard: true,
         }}
       >
-        <Tab.Screen name="Dashboard">{() => <DashboardScreen userId={userId} onLogOut={logOut} />}</Tab.Screen>
-        <Tab.Screen name="Meals">{() => <MealsStackScreen userId={userId} />}</Tab.Screen>
-        <Tab.Screen name="Workouts">{() => <WorkoutsStackScreen userId={userId} />}</Tab.Screen>
-        <Tab.Screen name="Assistant">{() => <ChatScreen userId={userId} />}</Tab.Screen>
-        <Tab.Screen name="Insulin Calc" component={InsulinCalcScreen} />
+        <Tab.Screen name="Dashboard" options={{ tabBarIcon: tabIcon('pulse') }}>
+          {() => <DashboardScreen userId={userId} onLogOut={logOut} />}
+        </Tab.Screen>
+        <Tab.Screen name="Meals" options={{ tabBarIcon: tabIcon('restaurant') }}>
+          {() => <MealsStackScreen userId={userId} />}
+        </Tab.Screen>
+        <Tab.Screen
+          name="Assistant"
+          options={{
+            tabBarIcon: () => (
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: colors.accent,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: -16,
+                }}
+              >
+                <Ionicons name="chatbubble-ellipses" size={26} color="white" />
+              </View>
+            ),
+          }}
+        >
+          {() => <ChatScreen userId={userId} />}
+        </Tab.Screen>
+        <Tab.Screen name="Workouts" options={{ tabBarIcon: tabIcon('barbell') }}>
+          {() => <WorkoutsStackScreen userId={userId} />}
+        </Tab.Screen>
+        <Tab.Screen name="Insulin Calc" component={InsulinCalcScreen} options={{ tabBarIcon: tabIcon('calculator') }} />
       </Tab.Navigator>
     </NavigationContainer>
   );

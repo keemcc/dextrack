@@ -44,9 +44,12 @@ mobile/
   theme.js        - light/dark palettes + `useTheme()`; screens build styles
                     with `makeStyles(colors)`
   settings.js     - per-meal-slot insulin settings in AsyncStorage
+  reminders.js    - long-acting insulin reminders (expo-notifications)
   components/MiniGlucoseChart.js     - reusable chart for a glucose window
   components/PredictabilityBadge.js  - "Consistent"/"Unpredictable" pill
   components/FoodListEditor.js       - add/remove/edit a meal's food items
+  components/InsulinReminders.js     - reminders card on the Insulin Calc tab
+  components/KeyboardAvoid.js        - keeps text boxes above the keyboard
   screens/        - one file per screen, plain functional components
 ```
 
@@ -98,11 +101,18 @@ mobile/
   in AsyncStorage, shared by Insulin Calc and the assistant
 - Light/dark theme: dark by default; Dashboard toggle cycles
   Auto/Light/Dark and is remembered in AsyncStorage
+- Long-acting insulin reminders: card on the Insulin Calc tab schedules a
+  daily local notification (`expo-notifications`); the list is kept in
+  AsyncStorage. Reminder only - never suggests or changes a dose. The
+  package is loaded in a try/catch, so the rest of the app runs without it
+- Keyboard handling: forms use `components/KeyboardAvoid.js` so inputs
+  stay above the keyboard; the tab bar hides while typing
 - Mobile screens: Login, Dashboard (trend + A1C card + dawn card + theme
   toggle + Log out, which clears the stored userId), Meals
   list -> AddMeal (USDA search + food list) -> MealDetail (predicted
   curve, food list, log + history), Workouts (same pattern), Assistant,
-  Insulin Calc
+  Insulin Calc (+ reminders). Tab bar icons are Ionicons from
+  `@expo/vector-icons`
 
 ## What to build next
 Nothing queued - the brief's planned features are built. Add new items
