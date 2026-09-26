@@ -21,8 +21,12 @@ JS — this server sits in between).
 1. Go to https://developer.dexcom.com and create a free developer account.
 2. Register an app. You'll immediately get **Sandbox** credentials — no
    approval needed for sandbox, which is fine for building/testing.
-3. Set the app's redirect URI to `http://localhost:4000/auth/callback`
-   (or whatever you set `DEXCOM_REDIRECT_URI` to below).
+3. Set the app's redirect URI to match `DEXCOM_REDIRECT_URI` below. To log
+   in from a phone, use the tailnet URL from `tailscale serve` (see the root
+   README), e.g. `https://<host>/auth/callback` - the phone's browser gets
+   redirected there after sign-in, so it must be reachable from the phone.
+   `http://localhost:4000/auth/callback` only works when logging in from a
+   browser on the dev machine itself.
 4. Copy `.env.example` to `.env` and fill in your client ID/secret:
    ```
    cp .env.example .env
@@ -32,7 +36,7 @@ JS — this server sits in between).
    npm install
    npm run dev
    ```
-6. Visit `http://localhost:4000/auth/login` in a browser to test the OAuth
+6. Visit `<your backend URL>/auth/login` in a browser to test the OAuth
    flow. Dexcom's sandbox lets you log in with fake test accounts (see their
    docs for sandbox test user credentials).
 

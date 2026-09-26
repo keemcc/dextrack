@@ -12,9 +12,16 @@ A1C estimate, and dawn phenomenon tracking.
   Dexcom's `/v3/users/self/egvs` glucose endpoint, proxies USDA FoodData
   Central for carb lookup, stores everything in a local JSON file via
   `lowdb` (v1, CommonJS API - `db.get('collection').push(...).write()` style).
-- `mobile/` - Expo (React Native), JS not TypeScript. Bottom tab navigation
-  (`@react-navigation/bottom-tabs`) with a native stack navigator nested
-  inside the Meals and Workouts tabs for list -> detail navigation.
+- `mobile/` - Expo SDK 57 (React Native 0.86, React 19), JS not TypeScript.
+  Bottom tab navigation (`@react-navigation/bottom-tabs` v7) with a native
+  stack navigator nested inside the Meals and Workouts tabs for list ->
+  detail navigation. Don't downgrade the SDK - Expo Go on the store only
+  runs current SDKs.
+- Dev networking: phone reaches the dev machine over a Tailscale tailnet.
+  Backend is exposed via `tailscale serve --bg 4000` (HTTPS on the machine's
+  MagicDNS name); Dexcom's redirect URI points at that HTTPS URL. Never
+  hardcode the tailnet hostname in tracked files - it lives in
+  `mobile/.env.local` and `backend/.env`.
 - No database beyond the JSON file, no auth beyond the Dexcom OAuth token
   exchange, no TypeScript. Keep additions consistent with this - don't
   introduce a real DB, don't convert to TS, don't add a build step.
@@ -27,7 +34,11 @@ backend/
   .env            - Dexcom + USDA credentials (see .env.example)
 mobile/
   App.js          - navigation shell
-  api.js          - all fetch calls to the backend, one object: `api.xxx()`
+  api.js          - all fetch calls to the backend, one object: `api.xxx()`;
+                    base URL from EXPO_PUBLIC_API_URL
+  .env.local      - EXPO_PUBLIC_API_URL + REACT_NATIVE_PACKAGER_HOSTNAME,
+                    gitignored (see .env.example; must be .env.local, Expo
+                    rejects the packager hostname in a plain .env)
   components/MiniGlucoseChart.js  - reusable chart for a glucose window
   screens/        - one file per screen, plain functional components
 ```
@@ -82,7 +93,9 @@ This is critical for the live demo - a fresh account has no history to show.
 
 ## Known rough edges (leave as-is, not worth fixing in 36 hours)
 - Login is "paste your userId after OAuth" instead of a real deep link -
-  fine for a demo where you pre-log-in before presenting
+  fine for a demo where you pre-log-in before presenting. OAuth itself
+  completes on the phone thanks to the tailnet redirect URI; only the
+  copy/paste step remains
 - Tokens stored in plaintext in `db.json` - not production-safe, don't fix
   now, just be ready to name this as a known gap if asked
 - No per-request auth checks (anyone with a userId can hit any endpoint) -
@@ -93,6 +106,12 @@ This is critical for the live demo - a fresh account has no history to show.
   complete or elegant. Don't add new dependencies unless clearly necessary.
 - Keep the dark theme (`#0f172a` background, `#22c55e` green accent,
   `#1e293b` card backgrounds) consistent with existing screens.
+- Keep the markdown docs (`CLAUDE.md`, `README.md`, `backend/README.md`)
+  in sync with the code. When a change affects setup steps, env vars,
+  routes, dependencies/versions, or what's built vs. still to do, update
+  the relevant docs in the same change (e.g. move a finished item from
+  "What to build next" to "What's already built"). Don't put machine-
+  specific values like the tailnet hostname in them - use placeholders.
 - Dexcom sandbox and USDA API keys are the developer's own - don't attempt
   to sign up for accounts or generate credentials; ask if `.env` is missing
   values rather than guessing or hardcoding placeholders that look real.
