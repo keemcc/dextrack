@@ -20,7 +20,8 @@ JS — this server sits in between).
   `/workouts/:id/predictability` uses the post-workout drop)
 - Runs the assistant chat (`POST /chat`): Gemini parses the message and
   words the reply, while the dose is computed in code and history-based
-  adjustments are capped at +/-20%
+  adjustments are capped at +/-20%. Uses the latest CGM reading for the
+  correction when it's 20 min old or newer (a typed value takes precedence)
 - Calculates insulin dose from a ratio ("1 unit : 8g carbs") and a
   step-based correction rule ("every 50 over target, +1 unit")
 - Estimates A1C from cached glucose readings (standard eAG formula)

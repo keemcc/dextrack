@@ -115,7 +115,10 @@ Remaining time goes to on-device testing and demo polish.
   message (meal/workout, carbs, matches a saved meal) and words the reply;
   the dose is computed in code (`computeDose`) and history-based adjustments
   are bounded (+/-20%, `suggestAdjustment`). Workouts get a carb suggestion,
-  never an insulin change. Needs `GEMINI_API_KEY` (optional `GEMINI_MODEL`,
+  never an insulin change. Glucose for dosing: typed override > value
+  stated in the message > live CGM reading (`getLiveGlucose`, only if
+  <=20 min old); with none, no correction is added. It also answers
+  "what's my blood sugar?". Needs `GEMINI_API_KEY` (optional `GEMINI_MODEL`,
   default `gemini-3.8-flash`) in `backend/.env`.
 - Insulin settings are saved per meal slot (breakfast/lunch/dinner/snack) in
   AsyncStorage (`mobile/settings.js`), shared by Insulin Calc and the

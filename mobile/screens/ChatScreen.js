@@ -13,7 +13,7 @@ export default function ChatScreen({ userId }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [messages, setMessages] = useState([
-    { id: 'hi', from: 'bot', text: 'Hi! Tell me what you\'re about to eat or do (I'll use your live glucose reading, or you can type one above), e.g. "chicken alfredo".' },
+    { id: 'hi', from: 'bot', text: 'Hi! Tell me what you\'re about to eat or do (I\'ll use your live glucose reading, or you can type one above), e.g. "chicken alfredo".' },
   ]);
   const [input, setInput] = useState('');
   const [glucose, setGlucose] = useState('');

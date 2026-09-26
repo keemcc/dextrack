@@ -101,7 +101,8 @@ on), or share just the dev machine with them from the admin console
   reads the message and words the reply; the dose is calculated in code
   from your saved settings, and any adjustment based on your history is
   capped at +/-20%. Workouts get a carb suggestion, never an insulin change.
-  Needs `GEMINI_API_KEY` in `backend/.env`
+  Uses your live CGM reading (if under 20 min old) unless you type a glucose
+  value, and can answer "what's my blood sugar?". Needs `GEMINI_API_KEY` in `backend/.env`
 - **Insulin Calc** - enter your ratio as "1 unit : 8g carbs" and your
   correction as a step rule ("every 50 over target, +1 unit") instead of a
   raw formula - matches how most people actually think about dosing.
