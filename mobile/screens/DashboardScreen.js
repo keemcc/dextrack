@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, D
 import { LineChart } from 'react-native-chart-kit';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import CurrentGlucose from '../components/CurrentGlucose';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -23,7 +24,13 @@ export default function DashboardScreen({ userId, onLogOut }) {
         api.getA1C(userId, 90),
         api.getDawnPhenomenon(userId, 14),
       ]);
-      setReadings(historyRes.records || []);
+      let records = historyRes.records || [];
+      if (records.length === 0) {
+        // Nothing in the last 6h (sandbox / demo data): show the most recent 3 hours we have
+        const older = await api.getGlucoseHistory(userId, 24 * 14);
+        records = (older.records || []).slice(-36);
+      }
+      setReadings(records);
       setA1c(a1cRes);
       setDawn(dawnRes);
     } catch (e) {
@@ -35,10 +42,11 @@ export default function DashboardScreen({ userId, onLogOut }) {
 
   useEffect(() => {
     load();
+    const timer = setInterval(load, 5 * 60 * 1000); // Dexcom updates every 5 minutes
+    return () => clearInterval(timer);
   }, [load]);
 
   const values = readings.map((r) => r.value);
-  const latest = readings[readings.length - 1];
 
   return (
     <ScrollView
@@ -47,7 +55,7 @@ export default function DashboardScreen({ userId, onLogOut }) {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
     >
       <View style={styles.titleRow}>
-        <Text style={styles.title}>Glucose Trend</Text>
+        <Text style={styles.title}>Glucose</Text>
         <TouchableOpacity style={styles.themeButton} onPress={cyclePreference}>
           <Text style={styles.themeButtonText}>
             {preference === 'system' ? 'Auto' : preference === 'light' ? 'Light' : 'Dark'}
@@ -55,12 +63,7 @@ export default function DashboardScreen({ userId, onLogOut }) {
         </TouchableOpacity>
       </View>
 
-      {latest && (
-        <View style={styles.latestBox}>
-          <Text style={styles.latestValue}>{latest.value} mg/dL</Text>
-          <Text style={styles.latestTrend}>{latest.trend || ''}</Text>
-        </View>
-      )}
+      <CurrentGlucose readings={readings} />
 
       {error && <Text style={styles.error}>{error}</Text>}
 

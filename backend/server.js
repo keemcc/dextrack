@@ -960,6 +960,65 @@ app.get('/dawn-phenomenon', (req, res) => {
   });
 });
 
+// =====================================================================
+// DEV ONLY - fake "live" glucose so the dashboard trend can be tested without Dexcom.
+// Off unless ENABLE_DEV_ENDPOINTS=true in .env.
+//   POST /dev/glucose { userId, scenario }
+//   scenarios: rising-fast, rising-slow, steady, falling-slow, falling-fast, low, high
+// =====================================================================
+const DEV_SCENARIOS = {
+  'rising-fast': { end: 220, rate: 9, ramp: 8 },
+  'rising-slow': { end: 170, rate: 3.5, ramp: 12 },
+  steady: { end: 115, rate: 0, ramp: 0 },
+  'falling-slow': { end: 105, rate: -3.5, ramp: 12 },
+  'falling-fast': { end: 95, rate: -15, ramp: 6 },
+  low: { end: 62, rate: -5, ramp: 10 },
+  high: { end: 285, rate: 6, ramp: 14 },
+};
+
+const devTrend = (ratePer5) => {
+  const per15 = ratePer5 * 3;
+  if (per15 > 45) return 'doubleUp';
+  if (per15 > 20) return 'singleUp';
+  if (per15 > 8) return 'fortyFiveUp';
+  if (per15 < -45) return 'doubleDown';
+  if (per15 < -20) return 'singleDown';
+  if (per15 < -8) return 'fortyFiveDown';
+  return 'flat';
+};
+
+if (process.env.ENABLE_DEV_ENDPOINTS === 'true') {
+  app.post('/dev/glucose', (req, res) => {
+    const { userId, scenario } = req.body;
+    const sc = DEV_SCENARIOS[scenario];
+    if (!userId || !sc) {
+      return res.status(400).json({ error: 'userId and scenario required', scenarios: Object.keys(DEV_SCENARIOS) });
+    }
+
+    // replace any earlier fake live readings for this user
+    db.get('glucoseHistory').remove({ userId, dev: true }).write();
+
+    const COUNT = 36; // last 3 hours, every 5 minutes
+    const baseline = sc.end - sc.rate * sc.ramp;
+    const now = Date.now();
+    for (let i = 0; i < COUNT; i++) {
+      const stepsFromEnd = COUNT - 1 - i;
+      const inRamp = stepsFromEnd < sc.ramp;
+      const value = Math.round((inRamp ? sc.end - sc.rate * stepsFromEnd : baseline) + (Math.random() * 4 - 2));
+      db.get('glucoseHistory')
+        .push({
+          userId,
+          systemTime: new Date(now - stepsFromEnd * 5 * 60000).toISOString(),
+          value: Math.max(40, Math.min(400, value)),
+          trend: devTrend(inRamp ? sc.rate : 0),
+          dev: true,
+        })
+        .write();
+    }
+    res.json({ ok: true, scenario, readings: COUNT, latest: sc.end });
+  });
+}
+
 app.listen(PORT || 4000, () => {
   console.log(`Backend running on http://localhost:${PORT || 4000}`);
 });

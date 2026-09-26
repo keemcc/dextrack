@@ -3,6 +3,9 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { confirmAction } from '../components/confirm';
+
 import PredictabilityBadge from '../components/PredictabilityBadge';
 
 export default function WorkoutsScreen({ userId, navigation }) {
@@ -29,6 +32,17 @@ export default function WorkoutsScreen({ userId, navigation }) {
     }, [load])
   );
 
+  const askDelete = (workout) =>
+    confirmAction(
+      'Delete this workout?',
+      `"${workout.name}" and all of its logged sessions will be deleted.`,
+      'Delete',
+      async () => {
+        await api.deleteWorkout(workout.id);
+        load();
+      }
+    );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -46,11 +60,15 @@ export default function WorkoutsScreen({ userId, navigation }) {
           <TouchableOpacity
             style={styles.row}
             onPress={() => navigation.navigate('WorkoutDetail', { workout: item })}
+            onLongPress={() => askDelete(item)}
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>
               <PredictabilityBadge data={predict[item.id]} />
             </View>
+            <TouchableOpacity onPress={() => askDelete(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="trash-outline" size={20} color={colors.faint} style={{ marginRight: 14 }} />
+            </TouchableOpacity>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
         )}
