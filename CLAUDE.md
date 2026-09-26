@@ -100,7 +100,9 @@ mobile/
   change. Glucose for dosing: typed override > value stated in the message
   > live CGM reading (`getLiveGlucose`, only if <=20 min old); with none,
   no correction is added. It also answers "what's my blood sugar?". Needs
-  `GEMINI_API_KEY` (optional `GEMINI_MODEL`) in `backend/.env`
+  `GEMINI_API_KEY` (optional `GEMINI_MODEL`, tried first) in `backend/.env`. Calls
+  fall through a model chain on 429/404/503 (`GEMINI_MODEL_CHAIN`, lite models
+  first for free-tier limits)
 - Insulin settings are saved per meal slot (breakfast/lunch/dinner/snack)
   in AsyncStorage, shared by Insulin Calc and the assistant
 - Light/dark theme: dark by default; Dashboard toggle cycles
