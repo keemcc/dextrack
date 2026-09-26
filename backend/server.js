@@ -610,16 +610,25 @@ app.post('/calculate-dose', (req, res) => {
 // CHATBOT - Gemini parses what you're eating; the dose math stays deterministic
 // =====================================================================
 
+// Models to try, in order. Lite models have the roomiest free-tier limits, and each
+// model has its own quota, so when one is rate limited (429), retired (404) or busy (503)
+// we move on to the next instead of failing. GEMINI_MODEL in .env goes first.
+const GEMINI_MODEL_CHAIN = [
+  ...(GEMINI_MODEL ? [GEMINI_MODEL] : []),
+  'gemini-flash-lite-latest',
+  'gemini-3.5-flash-lite',
+  'gemini-3.8-flash',
+].filter((m, i, all) => all.indexOf(m) === i);
+
 async function callGemini(prompt, { json = false } = {}) {
   if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set in backend/.env');
-  const model = GEMINI_MODEL || 'gemini-3.8-flash';
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: json ? { responseMimeType: 'application/json', temperature: 0.2 } : { temperature: 0.5 },
   };
 
-  // Retry a couple of times on temporary overload (503) / rate limit (429)
-  for (let attempt = 0; ; attempt++) {
+  let lastErr;
+  for (const model of GEMINI_MODEL_CHAIN) {
     try {
       const r = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -628,14 +637,16 @@ async function callGemini(prompt, { json = false } = {}) {
       );
       return r.data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
     } catch (err) {
+      lastErr = err;
       const status = err.response?.status;
-      if ((status === 503 || status === 429) && attempt < 2) {
-        await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
+      if (status === 429 || status === 404 || status === 503) {
+        console.warn(`Gemini model ${model} unavailable (${status}), trying the next one`);
         continue;
       }
       throw err;
     }
   }
+  throw lastErr;
 }
 
 // Summarize past instances of a saved meal from cached glucose data.

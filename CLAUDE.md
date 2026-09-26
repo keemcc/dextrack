@@ -116,7 +116,8 @@ Remaining time goes to on-device testing and demo polish.
   the dose is computed in code (`computeDose`) and history-based adjustments
   are bounded (+/-20%, `suggestAdjustment`). Workouts get a carb suggestion,
   never an insulin change. Needs `GEMINI_API_KEY` (optional `GEMINI_MODEL`,
-  default `gemini-3.8-flash`) in `backend/.env`.
+  tried first) in `backend/.env`. The assistant falls through a model chain on
+  429/404/503 (`GEMINI_MODEL_CHAIN`, lite models first for free-tier limits).
 - Insulin settings are saved per meal slot (breakfast/lunch/dinner/snack) in
   AsyncStorage (`mobile/settings.js`), shared by Insulin Calc and the
   assistant.
