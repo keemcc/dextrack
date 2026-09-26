@@ -100,7 +100,9 @@ on), or share just the dev machine with them from the admin console
 - **Assistant** - describe what you're about to eat or do; it estimates
   carbs, matches your saved meals, and shows the calculated dose (plus a
   small, capped adjustment if past logs of that meal ran high or low). For
-  workouts it only suggests carbs, never insulin changes
+  workouts it only suggests carbs, never insulin changes. Uses your live CGM
+  reading (if under 20 min old) unless you type a glucose value, and can
+  answer "what's my blood sugar?"
 - **Insulin Calc** - enter your ratio as "1 unit : 8g carbs" and your
   correction as a step rule ("every 50 over target, +1 unit") instead of a
   raw formula - matches how most people actually think about dosing.

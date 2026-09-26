@@ -3,12 +3,13 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet, TextInput } from 'r
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import { confirmAction } from '../components/confirm';
 import KeyboardScrollScreen, { KeyboardAvoid } from '../components/KeyboardAvoid';
 
 import MiniGlucoseChart from '../components/MiniGlucoseChart';
 import PredictabilityBadge from '../components/PredictabilityBadge';
 
-export default function WorkoutDetailScreen({ route, userId }) {
+export default function WorkoutDetailScreen({ route, userId, navigation }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { workout } = route.params;
@@ -44,6 +45,17 @@ export default function WorkoutDetailScreen({ route, userId }) {
       setLogging(false);
     }
   };
+
+  const removeWorkout = () =>
+    confirmAction(
+      'Delete this workout?',
+      `"${workout.name}" and all of its logged sessions will be deleted.`,
+      'Delete',
+      async () => {
+        await api.deleteWorkout(workout.id);
+        navigation.goBack();
+      }
+    );
 
   return (
     <KeyboardAvoid style={styles.container}>
@@ -90,6 +102,11 @@ export default function WorkoutDetailScreen({ route, userId }) {
 
           </View>
         }
+        ListFooterComponent={
+          <TouchableOpacity style={styles.deleteButton} onPress={removeWorkout}>
+            <Text style={styles.deleteText}>Delete this workout</Text>
+          </TouchableOpacity>
+        }
         data={logs}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -114,6 +131,8 @@ export default function WorkoutDetailScreen({ route, userId }) {
 }
 
 const makeStyles = (c) => StyleSheet.create({
+  deleteButton: { marginTop: 24, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: c.danger, alignItems: 'center' },
+  deleteText: { color: c.danger, fontWeight: '700' },
   container: { flex: 1, padding: 20 },
   title: { color: c.text, fontSize: 22, fontWeight: '700', marginBottom: 16 },
   predictBox: { backgroundColor: c.card, borderRadius: 12, padding: 14, marginTop: 12, marginBottom: 12 },

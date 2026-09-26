@@ -20,7 +20,8 @@ JS — this server sits in between).
   step-based correction rule ("every 50 over target, +1 unit")
 - Chat assistant (`POST /chat`) - Gemini reads the message and writes the
   reply, but the dose is always computed by the same code as
-  `/calculate-dose`
+  `/calculate-dose`. Uses the latest CGM reading for the correction when
+  it's 20 min old or newer (a typed value takes precedence)
 - Estimates A1C from cached glucose readings (standard eAG formula)
 - Estimates dawn phenomenon (average glucose rise, 3am-8am) from cached readings
 

@@ -734,6 +734,58 @@ function normalizeSettings(src = {}) {
 
 const guessMealType = (hour) => (hour >= 4 && hour < 11 ? 'breakfast' : hour < 16 && hour >= 11 ? 'lunch' : hour >= 16 && hour < 21 ? 'dinner' : 'snack');
 
+const TREND_WORDS = {
+  doubleUp: 'rising quickly',
+  singleUp: 'rising',
+  fortyFiveUp: 'rising slowly',
+  flat: 'steady',
+  fortyFiveDown: 'falling slowly',
+  singleDown: 'falling',
+  doubleDown: 'falling quickly',
+};
+
+// Latest glucose reading for the user: refresh from Dexcom if reachable, then read the cache.
+// "fresh" = 20 min old or less; only fresh readings are used for dosing.
+async function getLiveGlucose(userId) {
+  const end = new Date();
+  const start = new Date(end.getTime() - 3 * 60 * 60 * 1000);
+  try {
+    await fetchAndCacheGlucose(userId, start.toISOString(), end.toISOString());
+  } catch (e) {
+    // Dexcom unreachable - use whatever is cached
+  }
+
+  const all = db.get('glucoseHistory').filter((r) => r.userId === userId).sortBy('systemTime').value();
+  const latest = all[all.length - 1];
+  if (!latest) return null;
+
+  const latestTime = new Date(latest.systemTime).getTime();
+  const ageMinutes = Math.max(0, Math.round((Date.now() - latestTime) / 60000));
+
+  // change vs the reading closest to 15 minutes earlier
+  let prev = null;
+  all.forEach((r) => {
+    const gap = (latestTime - new Date(r.systemTime).getTime()) / 60000;
+    if (gap >= 8 && gap <= 25 && (!prev || Math.abs(gap - 15) < Math.abs(prev.gap - 15))) prev = { r, gap };
+  });
+
+  return {
+    value: latest.value,
+    trend: TREND_WORDS[latest.trend] || null,
+    ageMinutes,
+    fresh: ageMinutes <= 20,
+    change: prev ? latest.value - prev.r.value : null,
+    changeMinutes: prev ? Math.round(prev.gap) : null,
+  };
+}
+
+const liveFact = (live) =>
+  live
+    ? `- Latest CGM reading: ${live.value} mg/dL${live.trend ? `, ${live.trend}` : ''}` +
+      (live.change != null ? ` (${live.change > 0 ? '+' : ''}${live.change} in ${live.changeMinutes} min)` : '') +
+      `, taken ${live.ageMinutes} min ago${live.fresh ? '' : ' - this is OLD, not a live reading'}\n`
+    : `- No CGM readings are available.\n`;
+
 // POST /chat { userId, message, currentGlucose, ratioUnits?, ratioCarbs?, correctionStepAmount?, correctionStepUnits?, target? }
 app.post('/chat', async (req, res) => {
   const { userId, message, currentGlucose } = req.body;
@@ -743,6 +795,8 @@ app.post('/chat', async (req, res) => {
 
   const meals = db.get('meals').filter({ userId }).value();
   const workouts = db.get('workouts').filter({ userId }).value();
+
+  const livePromise = getLiveGlucose(userId).catch(() => null);
 
   try {
     // Step 1: Gemini turns free text into structured data + matches a saved meal
@@ -754,18 +808,28 @@ app.post('/chat', async (req, res) => {
           `Saved workouts: ${JSON.stringify(workouts.map((w) => ({ id: w.id, name: w.name })))}\n` +
           `Message: "${String(message).replace(/"/g, "'")}"\n` +
           `Reply ONLY with JSON: {"kind": "meal"|"workout"|"other", "foods": string, "carbs": number, "matchedMealId": string|null, ` +
-          `"workoutName": string, "matchedWorkoutId": string|null, "durationMinutes": number|null, "mealType": "breakfast"|"lunch"|"dinner"|"snack"|null}. ` +
+          `"workoutName": string, "matchedWorkoutId": string|null, "durationMinutes": number|null, "mealType": "breakfast"|"lunch"|"dinner"|"snack"|null, "glucose": number|null}. ` +
           `kind is "meal" if they are about to eat, "workout" if they are about to exercise, otherwise "other". ` +
-          `If the message states a carb amount, use it. Matched ids must come from the saved lists or be null. mealType is the meal slot if stated or implied, else null.`,
+          `If the message states a carb amount, use it. Matched ids must come from the saved lists or be null. mealType is the meal slot if stated or implied, else null. glucose is the blood sugar in mg/dL if the user states one, else null.`,
         { json: true }
       )
     );
+
+    // Which glucose value to use: typed in the app > stated in the message > fresh live reading
+    const live = await livePromise;
+    const typed = currentGlucose != null && currentGlucose !== '' ? Number(currentGlucose) : NaN;
+    const said = Number(parsed.glucose);
+    let stated;
+    if (Number.isFinite(typed) && typed > 0) stated = { value: typed, source: 'typed' };
+    else if (Number.isFinite(said) && said > 0) stated = { value: said, source: 'message' };
+    else if (live && live.fresh) stated = { value: live.value, source: 'live' };
+    else stated = { value: null, source: 'none' };
 
     if (parsed.kind === 'workout') {
       const workout = workouts.find((w) => w.id === parsed.matchedWorkoutId) || null;
       if (workout) await ensureWorkoutWindowsCached(workout.id, userId);
       const history = workout ? summarizeWorkoutHistory(workout.id, userId) : null;
-      const glucoseNow = currentGlucose != null && currentGlucose !== '' ? Number(currentGlucose) : null;
+      const glucoseNow = stated.value;
       const sug = suggestWorkoutCarbs(history, glucoseNow);
 
       let reply;
@@ -775,6 +839,7 @@ app.post('/chat', async (req, res) => {
             `Facts (do not change any numbers):\n` +
             `- Planned workout: ${parsed.workoutName || 'exercise'}${parsed.durationMinutes ? `, about ${parsed.durationMinutes} min` : ''}\n` +
             (glucoseNow != null ? `- Current glucose: ${glucoseNow} mg/dL\n` : '') +
+            liveFact(live) +
             (history
               ? `- The user has done the saved workout "${workout.name}" ${history.count} times. Glucose averaged ${history.avgBaseline} before and ${history.avgLow} at its lowest afterward (a drop of ${history.avgDrop}).\n`
               : `- No past history for this workout.\n`) +
@@ -793,6 +858,8 @@ app.post('/chat', async (req, res) => {
       return res.json({
         reply,
         kind: 'workout',
+        glucose: stated,
+        live,
         matchedWorkout: workout ? { id: workout.id, name: workout.name } : null,
         history,
         carbSuggestion: sug.carbs ? { carbs: sug.carbs, reasons: sug.reasons } : null,
@@ -800,10 +867,22 @@ app.post('/chat', async (req, res) => {
     }
 
     if (parsed.kind !== 'meal' || !(parsed.carbs >= 0)) {
-      const reply = await callGemini(
-        `You are a friendly diabetes companion in a school hackathon app. Reply briefly. Tell the user to describe what they plan to eat so you can estimate carbs and insulin. Never give medical advice beyond the app's calculator. User said: "${message}"`
-      );
-      return res.json({ reply });
+      let reply;
+      try {
+        reply = await callGemini(
+          `You are a friendly diabetes companion in a school hackathon app. Reply briefly (1-3 sentences).\n` +
+            `Facts (do not change any numbers):\n` +
+            liveFact(live) +
+            `If the user asks about their current blood sugar or trend, answer using those facts, and say if the reading is old. ` +
+            `Otherwise, tell them they can describe what they plan to eat or do so you can estimate carbs and insulin. ` +
+            `Never give medical advice beyond the app's calculator. User said: "${String(message).replace(/"/g, "'")}"`
+        );
+      } catch (e) {
+        reply = live
+          ? `Your latest reading is ${live.value} mg/dL${live.trend ? ` (${live.trend})` : ''}, from ${live.ageMinutes} min ago.`
+          : 'I have no glucose readings yet. Tell me what you plan to eat and I can estimate carbs and insulin.';
+      }
+      return res.json({ reply, live });
     }
 
     const validTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -815,7 +894,7 @@ app.post('/chat', async (req, res) => {
     settings = normalizeSettings((req.body.settingsByType && req.body.settingsByType[mealType]) || req.body);
 
     const meal = meals.find((m) => m.id === parsed.matchedMealId) || null;
-    const glucose = currentGlucose != null && currentGlucose !== '' ? Number(currentGlucose) : settings.target;
+    const glucose = stated.value != null ? stated.value : settings.target;
     const dose = computeDose({ carbs: parsed.carbs, currentGlucose: glucose, ...settings });
 
     if (meal) await ensureMealWindowsCached(meal.id, userId);
@@ -830,7 +909,11 @@ app.post('/chat', async (req, res) => {
         `You are a friendly diabetes companion in a school hackathon app. Write a short (3-5 sentences) reply.\n` +
           `Facts (do not change any numbers):\n` +
           `- Meal: ${parsed.foods}, about ${parsed.carbs}g carbs\n` +
-          `- Meal slot: ${mealType} (dose uses that slot's saved ratio)\n` + `- Current glucose used: ${glucose} mg/dL\n` +
+          `- Meal slot: ${mealType} (dose uses that slot's saved ratio)\n` + (stated.value != null
+            ? `- Current glucose used: ${glucose} mg/dL (${stated.source === 'live' ? 'live CGM reading' : 'given by the user'})\n`
+            : `- No current glucose was available, so no correction dose was added (assumed at the target, ${glucose} mg/dL).\n`) +
+          liveFact(live) +
+          `- If glucose is low or falling quickly, tell them to check and treat that first per their care plan.\n` +
           `- Calculated dose: ${dose.totalDose} units (${dose.carbDose} for carbs + ${dose.correctionDose} correction)\n` +
           (history
             ? `- The user has eaten the saved meal "${meal.name}" ${history.count} times. ${adj.reason}. ` +
@@ -853,6 +936,8 @@ app.post('/chat', async (req, res) => {
       carbs: parsed.carbs,
       matchedMeal: meal ? { id: meal.id, name: meal.name } : null,
       mealType,
+      glucose: { ...stated, used: glucose },
+      live,
       settingsUsed: settings,
       dose,
       history,
@@ -967,6 +1052,65 @@ app.get('/dawn-phenomenon', (req, res) => {
         : 'No strong early-morning rise pattern in the cached data right now.',
   });
 });
+
+// =====================================================================
+// DEV ONLY - fake "live" glucose so the dashboard trend can be tested without Dexcom.
+// Off unless ENABLE_DEV_ENDPOINTS=true in .env.
+//   POST /dev/glucose { userId, scenario }
+//   scenarios: rising-fast, rising-slow, steady, falling-slow, falling-fast, low, high
+// =====================================================================
+const DEV_SCENARIOS = {
+  'rising-fast': { end: 220, rate: 9, ramp: 8 },
+  'rising-slow': { end: 170, rate: 3.5, ramp: 12 },
+  steady: { end: 115, rate: 0, ramp: 0 },
+  'falling-slow': { end: 105, rate: -3.5, ramp: 12 },
+  'falling-fast': { end: 95, rate: -15, ramp: 6 },
+  low: { end: 62, rate: -5, ramp: 10 },
+  high: { end: 285, rate: 6, ramp: 14 },
+};
+
+const devTrend = (ratePer5) => {
+  const per15 = ratePer5 * 3;
+  if (per15 > 45) return 'doubleUp';
+  if (per15 > 20) return 'singleUp';
+  if (per15 > 8) return 'fortyFiveUp';
+  if (per15 < -45) return 'doubleDown';
+  if (per15 < -20) return 'singleDown';
+  if (per15 < -8) return 'fortyFiveDown';
+  return 'flat';
+};
+
+if (process.env.ENABLE_DEV_ENDPOINTS === 'true') {
+  app.post('/dev/glucose', (req, res) => {
+    const { userId, scenario } = req.body;
+    const sc = DEV_SCENARIOS[scenario];
+    if (!userId || !sc) {
+      return res.status(400).json({ error: 'userId and scenario required', scenarios: Object.keys(DEV_SCENARIOS) });
+    }
+
+    // replace any earlier fake live readings for this user
+    db.get('glucoseHistory').remove({ userId, dev: true }).write();
+
+    const COUNT = 36; // last 3 hours, every 5 minutes
+    const baseline = sc.end - sc.rate * sc.ramp;
+    const now = Date.now();
+    for (let i = 0; i < COUNT; i++) {
+      const stepsFromEnd = COUNT - 1 - i;
+      const inRamp = stepsFromEnd < sc.ramp;
+      const value = Math.round((inRamp ? sc.end - sc.rate * stepsFromEnd : baseline) + (Math.random() * 4 - 2));
+      db.get('glucoseHistory')
+        .push({
+          userId,
+          systemTime: new Date(now - stepsFromEnd * 5 * 60000).toISOString(),
+          value: Math.max(40, Math.min(400, value)),
+          trend: devTrend(inRamp ? sc.rate : 0),
+          dev: true,
+        })
+        .write();
+    }
+    res.json({ ok: true, scenario, readings: COUNT, latest: sc.end });
+  });
+}
 
 app.listen(PORT || 4000, () => {
   console.log(`Backend running on http://localhost:${PORT || 4000}`);

@@ -3,13 +3,14 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet, TextInput } from 'r
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import { confirmAction } from '../components/confirm';
 import KeyboardScrollScreen, { KeyboardAvoid } from '../components/KeyboardAvoid';
 
 import MiniGlucoseChart from '../components/MiniGlucoseChart';
 import PredictabilityBadge from '../components/PredictabilityBadge';
 import FoodListEditor, { sumCarbs } from '../components/FoodListEditor';
 
-export default function MealDetailScreen({ route, userId }) {
+export default function MealDetailScreen({ route, userId, navigation }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [meal, setMeal] = useState(route.params.meal);
@@ -62,6 +63,17 @@ export default function MealDetailScreen({ route, userId }) {
     }
   };
 
+  const removeMeal = () =>
+    confirmAction(
+      'Delete this meal?',
+      `"${meal.name}" and all of its logged history will be deleted.`,
+      'Delete',
+      async () => {
+        await api.deleteMeal(meal.id);
+        navigation.goBack();
+      }
+    );
+
   return (
     <KeyboardAvoid style={styles.container}>
       <FlatList
@@ -110,6 +122,11 @@ export default function MealDetailScreen({ route, userId }) {
 
           </View>
         }
+        ListFooterComponent={
+          <TouchableOpacity style={styles.deleteButton} onPress={removeMeal}>
+            <Text style={styles.deleteText}>Delete this meal</Text>
+          </TouchableOpacity>
+        }
         data={logs}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -133,6 +150,8 @@ export default function MealDetailScreen({ route, userId }) {
 }
 
 const makeStyles = (c) => StyleSheet.create({
+  deleteButton: { marginTop: 24, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: c.danger, alignItems: 'center' },
+  deleteText: { color: c.danger, fontWeight: '700' },
   container: { flex: 1, padding: 20 },
   title: { color: c.text, fontSize: 22, fontWeight: '700' },
   subtitle: { color: c.textMuted, fontSize: 13, marginBottom: 16 },

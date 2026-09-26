@@ -3,6 +3,9 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { confirmAction } from '../components/confirm';
+
 import PredictabilityBadge from '../components/PredictabilityBadge';
 
 export default function MealsScreen({ userId, navigation }) {
@@ -29,6 +32,17 @@ export default function MealsScreen({ userId, navigation }) {
     }, [load])
   );
 
+  const askDelete = (meal) =>
+    confirmAction(
+      'Delete this meal?',
+      `"${meal.name}" and all of its logged history will be deleted.`,
+      'Delete',
+      async () => {
+        await api.deleteMeal(meal.id);
+        load();
+      }
+    );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -49,12 +63,16 @@ export default function MealsScreen({ userId, navigation }) {
           <TouchableOpacity
             style={styles.mealRow}
             onPress={() => navigation.navigate('MealDetail', { meal: item })}
+            onLongPress={() => askDelete(item)}
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.mealName}>{item.name}</Text>
               <Text style={styles.mealCarbs}>~{item.usualCarbs}g carbs usually</Text>
               <PredictabilityBadge data={predict[item.id]} />
             </View>
+            <TouchableOpacity onPress={() => askDelete(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="trash-outline" size={20} color={colors.faint} style={{ marginRight: 14 }} />
+            </TouchableOpacity>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
         )}

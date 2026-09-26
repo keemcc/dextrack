@@ -95,8 +95,10 @@ mobile/
   the dose comes from `computeDose` (shared with `/calculate-dose`), and
   history-based adjustments are fixed rules capped at +/-15%
   (`suggestAdjustment`). Workouts get a carb suggestion, never an insulin
-  change. Needs `GEMINI_API_KEY` (optional `GEMINI_MODEL`) in
-  `backend/.env`
+  change. Glucose for dosing: typed override > value stated in the message
+  > live CGM reading (`getLiveGlucose`, only if <=20 min old); with none,
+  no correction is added. It also answers "what's my blood sugar?". Needs
+  `GEMINI_API_KEY` (optional `GEMINI_MODEL`) in `backend/.env`
 - Insulin settings are saved per meal slot (breakfast/lunch/dinner/snack)
   in AsyncStorage, shared by Insulin Calc and the assistant
 - Light/dark theme: dark by default; Dashboard toggle cycles
