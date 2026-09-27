@@ -77,8 +77,10 @@ isn't registered without it.
 
 ## Gemini assistant
 `/chat` needs `GEMINI_API_KEY` in `.env` (get one at
-https://aistudio.google.com/apikey). `GEMINI_MODEL` is optional and
-overrides the default model set in `server.js`. Without a key, every other
+https://aistudio.google.com/apikey). Calls go through a model chain
+(`GEMINI_MODEL_CHAIN` in `server.js`, lite models first for their roomier
+free-tier limits) and fall through to the next model on 429/404/503.
+`GEMINI_MODEL` is optional and is tried first. Without a key, every other
 route still works - only the Assistant tab returns an error.
 
 ## USDA food lookup
