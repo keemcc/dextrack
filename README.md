@@ -1,4 +1,7 @@
-# Diabetes Companion App - Starter Project
+# Diabetes Companion App
+
+> **⚠️ Educational hackathon project - not a medical device and not medical advice.** It has not been reviewed or approved by the FDA or any other regulator, uses Dexcom sandbox (simulated) da
+ta only, and must not be used to make real insulin dosing or treatment decisions. Always follow your doctor or diabetes care team. Not affiliated with or endorsed by Dexcom, Inc.
 
 Tracks blood sugar + trends from Dexcom, saves meals and workouts with a
 history of every time you log them (each with the glucose curve from around
